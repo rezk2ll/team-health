@@ -25,7 +25,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return json(result);
 	} catch (e) {
 		if (e instanceof RateLimitError) throw error(429, e.message);
-		if (e instanceof GitHubError) throw error(502, `GitHub: ${e.message}`);
+		if (e instanceof GitHubError) {
+			console.error('[api/flow] GitHub error:', (e as Error).message);
+			throw error(502, 'Upstream GitHub request failed');
+		}
 		throw e;
 	}
 };

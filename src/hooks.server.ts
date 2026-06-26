@@ -28,8 +28,28 @@ const guard: Handle = async ({ event, resolve }) => {
 		throw redirect(303, `/auth/signin?callbackUrl=${encodeURIComponent(path)}`);
 	}
 	const u = session.user as { id?: string; name?: string | null; email?: string | null };
-	event.locals.user = { sub: u.id ?? u.email ?? 'unknown', name: u.name ?? '', email: u.email ?? '' };
+	const sub = u.id ?? u.email;
+	if (!sub) {
+		// Standard OIDC always provides `sub`; without it distinct users would collide
+		// on the fallback. Surface it loudly rather than silently merging identities.
+		console.warn('[auth] session user has no id or email; falling back to a shared "unknown" subject');
+	}
+	event.locals.user = { sub: sub ?? 'unknown', name: u.name ?? '', email: u.email ?? '' };
 	return resolve(event);
 };
 
-export const handle: Handle = AUTH_DISABLED ? guard : sequence(authHandle, guard);
+// Defense-in-depth response headers. (A strict CSP is intentionally left out: it
+// needs SvelteKit's nonce integration via svelte.config to avoid breaking the
+// app's inline hydration script and styles.)
+const securityHeaders: Handle = async ({ event, resolve }) => {
+	const response = await resolve(event);
+	response.headers.set('X-Frame-Options', 'DENY');
+	response.headers.set('X-Content-Type-Options', 'nosniff');
+	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+	response.headers.set('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+	return response;
+};
+
+export const handle: Handle = AUTH_DISABLED
+	? sequence(guard, securityHeaders)
+	: sequence(authHandle, guard, securityHeaders);
