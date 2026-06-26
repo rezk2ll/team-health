@@ -12,6 +12,18 @@
 	// True whenever a report (team or global) is being (re)fetched.
 	const loading = $derived(metrics.loading || globalMetrics.loading);
 
+	// Per-page browser title: "Section · team·health".
+	const pageSection = $derived.by(() => {
+		const p = page.url.pathname;
+		if (p === '/') return 'Overview';
+		if (p.startsWith('/global')) return 'Global trends';
+		if (p.startsWith('/teams')) return 'Teams';
+		if (p.startsWith('/charts')) return 'Charts';
+		if (p.startsWith('/auth')) return 'Sign in';
+		return '';
+	});
+	const pageTitle = $derived(pageSection ? `${pageSection} · team·health` : 'team·health');
+
 	// Mobile nav drawer (sidebar collapses below lg).
 	let drawerOpen = $state(false);
 	// Close the drawer on navigation.
@@ -32,17 +44,17 @@
 </script>
 
 <svelte:head>
-	<title>team·health</title>
+	<title>{pageTitle}</title>
 	<meta property="og:site_name" content="Twake" />
 	<meta property="og:type" content="website" />
-	<meta property="og:title" content="team·health — engineering metrics" />
+	<meta property="og:title" content="team·health · engineering metrics" />
 	<meta property="og:description" content="Live engineering-delivery metrics for any GitHub team: PR throughput, review depth, code volume, and release cadence." />
 	<meta property="og:url" content={page.url.href} />
 	<meta property="og:image" content="{page.url.origin}/og.png" />
 	<meta property="og:image:width" content="1200" />
 	<meta property="og:image:height" content="630" />
 	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="twitter:title" content="team·health — engineering metrics" />
+	<meta name="twitter:title" content="team·health · engineering metrics" />
 	<meta name="twitter:description" content="Live engineering-delivery metrics for any GitHub team." />
 	<meta name="twitter:image" content="{page.url.origin}/og.png" />
 </svelte:head>
