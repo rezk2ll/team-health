@@ -9,6 +9,18 @@ const MAX_CONCURRENCY = Number(env.GITHUB_MAX_CONCURRENCY) || 8;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Circuit breaker for the primary GitHub rate limit. Once the shared token's
+// hourly quota is spent, every further call would fail the same way until the
+// reset, so we record the reset time and fail fast (no network, no semaphore)
+// instead of piling more failing requests onto the exhausted token.
+let rateLimitedUntil = 0;
+
+function rateLimitResetMs(res: Response): number {
+	const reset = Number(res.headers.get('x-ratelimit-reset'));
+	// Header is epoch seconds; fall back to a short cooldown if it's missing.
+	return Number.isFinite(reset) && reset > 0 ? reset * 1000 : Date.now() + 60_000;
+}
+
 // A tiny semaphore so the shared read-only token is never hammered with more
 // than MAX_CONCURRENCY in-flight GraphQL calls, even under concurrent users.
 let active = 0;
@@ -28,6 +40,14 @@ function release(): void {
 
 export class GitHubError extends Error {}
 
+/** The shared token's primary rate limit is exhausted. `resetAt` is epoch ms. */
+export class RateLimitError extends GitHubError {
+	constructor(public readonly resetAt: number) {
+		super(`GitHub API rate limit exceeded. Resets at ${new Date(resetAt).toISOString()}.`);
+		this.name = 'RateLimitError';
+	}
+}
+
 export type GraphQL = (query: string) => Promise<Record<string, unknown>>;
 
 /** Run a GraphQL query against GitHub with the read-only token, retrying transient
@@ -36,6 +56,9 @@ export type GraphQL = (query: string) => Promise<Record<string, unknown>>;
 export const graphql: GraphQL = async (query) => {
 	const token = env.GITHUB_TOKEN;
 	if (!token) throw new GitHubError('GITHUB_TOKEN is not set');
+
+	// Fail fast while the breaker is open, before taking a semaphore slot.
+	if (rateLimitedUntil > Date.now()) throw new RateLimitError(rateLimitedUntil);
 
 	await acquire();
 	try {
@@ -66,10 +89,16 @@ export const graphql: GraphQL = async (query) => {
 			}
 			if (res.status === 401 || res.status === 403) {
 				const body = await res.text();
-				// Abuse / rate-limit responses are retryable; auth failures are not.
-				if (/rate limit|abuse|secondary/i.test(body)) {
-					lastError = `HTTP ${res.status}: rate limited`;
+				// Secondary / abuse limits are short-lived: retry with backoff.
+				if (/abuse|secondary/i.test(body)) {
+					lastError = `HTTP ${res.status}: secondary rate limit`;
 					continue;
+				}
+				// Primary limit: the hourly quota is spent. Open the breaker and fail
+				// fast (retrying within seconds is useless when it resets hourly).
+				if (/api rate limit exceeded/i.test(body)) {
+					rateLimitedUntil = rateLimitResetMs(res);
+					throw new RateLimitError(rateLimitedUntil);
 				}
 				throw new GitHubError(`HTTP ${res.status}: ${body.slice(0, 200)}`);
 			}
@@ -85,6 +114,11 @@ export const graphql: GraphQL = async (query) => {
 			// resource-limit error and no data came back.
 			if (body.errors?.length) {
 				const msg = JSON.stringify(body.errors).slice(0, 300);
+				// Primary limit can come back as a 200 with a RATE_LIMIT error type.
+				if (/RATE_LIMIT/.test(msg)) {
+					rateLimitedUntil = rateLimitResetMs(res);
+					throw new RateLimitError(rateLimitedUntil);
+				}
 				if (!body.data && /resource limit|timeout/i.test(msg)) {
 					lastError = `GraphQL: ${msg}`;
 					continue;

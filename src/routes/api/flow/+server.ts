@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import { getFlow } from '$lib/server/flow-cache';
 import { parseRepoSelection } from '$lib/server/selection';
 import { isMonthKey } from '$lib/months';
-import { GitHubError } from '$lib/server/github/client';
+import { GitHubError, RateLimitError } from '$lib/server/github/client';
 import { audit } from '$lib/server/store/audit';
 import type { RequestHandler } from './$types';
 
@@ -24,6 +24,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		await audit(locals.user.sub, 'flow.view', { repos: repos.length, months, to });
 		return json(result);
 	} catch (e) {
+		if (e instanceof RateLimitError) throw error(429, e.message);
 		if (e instanceof GitHubError) throw error(502, `GitHub: ${e.message}`);
 		throw e;
 	}
