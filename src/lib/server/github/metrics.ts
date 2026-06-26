@@ -1,7 +1,7 @@
 import { type GraphQL } from './client';
 import { median, std, round, isBugLabel } from './stats';
 import { type Month, monthKey, monthStart, monthEnd } from './months';
-import type { Repo, Member, RepoMonth, OpenPr } from './types';
+import type { Repo, Member, RepoMonth, OpenPr, PrFlow } from './types';
 import type { MemberRepoMonthRow, ReviewRepoMonthRow } from '../store/assemble';
 
 // Heavy first:100 search aliases trip GitHub's per-query resource limit beyond
@@ -474,5 +474,50 @@ export async function fetchOpenPullRequests(gql: GraphQL, repos: Repo[]): Promis
 			});
 		}
 	});
+	return out;
+}
+
+/** Merged PRs in the window with their review timeline, for cycle-time + review
+ * health. One PrFlow per merged PR. */
+export async function fetchPrFlow(gql: GraphQL, repos: Repo[], months: Month[]): Promise<PrFlow[]> {
+	if (!months.length || !repos.length) return [];
+	const out: PrFlow[] = [];
+	for (const m of months) {
+		const month = monthKey(m);
+		const s = monthStart(m);
+		const e = monthEnd(m);
+		const blocks = repos.map(
+			({ owner, repo }, i) => `
+      f${i}: search(query: "repo:${owner}/${repo} type:pr is:merged merged:${s}..${e}", type: ISSUE, first: 100) {
+        nodes { ... on PullRequest {
+          createdAt mergedAt
+          reviews(first: 30) { nodes { submittedAt state author { login __typename } } }
+        } }
+      }`
+		);
+		const data = await runChunkedAliases(gql, blocks, 2);
+		repos.forEach(({ owner, repo }, i) => {
+			for (const pr of data[`f${i}`]?.nodes ?? []) {
+				if (!pr?.createdAt || !pr?.mergedAt) continue;
+				// Human reviews only: AI/bot reviewers (CodeRabbit, CodeScene) review
+				// instantly and would skew latency + bury who's actually reviewing.
+				const reviewNodes: any[] = (pr.reviews?.nodes ?? []).filter(
+					(r: any) => r?.submittedAt && r.author?.login && r.author?.__typename !== 'Bot'
+				);
+				const times = reviewNodes.map((r) => r.submittedAt).sort();
+				const approvals = reviewNodes.filter((r) => r.state === 'APPROVED').map((r) => r.submittedAt).sort();
+				const reviewers = [...new Set(reviewNodes.map((r) => r.author?.login).filter(Boolean))] as string[];
+				out.push({
+					repo: `${owner}/${repo}`,
+					month,
+					createdAt: pr.createdAt,
+					mergedAt: pr.mergedAt,
+					firstReviewAt: times[0] ?? null,
+					approvedAt: approvals[0] ?? null,
+					reviewers
+				});
+			}
+		});
+	}
 	return out;
 }

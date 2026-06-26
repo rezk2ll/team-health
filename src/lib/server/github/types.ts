@@ -90,3 +90,31 @@ export type AttentionResult = {
 	summary: { total: number } & Record<AttentionReason, number>;
 	generatedAt: number;
 };
+
+// ---- PR flow + review health (merged PRs in the window) ---------------------
+export type PrFlow = {
+	repo: string;
+	month: string; // merge month (YYYY-MM)
+	createdAt: string;
+	mergedAt: string;
+	firstReviewAt: string | null; // earliest review of any kind
+	approvedAt: string | null; // earliest APPROVED review
+	reviewers: string[]; // distinct reviewer logins
+};
+
+export type FlowStats = {
+	count: number;
+	reviewedPct: number; // share of merged PRs that got at least one review
+	firstReviewHours: number; // median open -> first review
+	mergeHours: number; // median open -> merged (total cycle time)
+	postApproveHours: number; // median approved -> merged
+};
+
+export type ReviewerLoad = { reviewer: string; prs: number };
+
+export type FlowResult = {
+	overall: FlowStats;
+	byMonth: ({ month: string } & FlowStats)[];
+	reviewerLoad: ReviewerLoad[]; // distinct PRs each person reviewed
+	generatedAt: number;
+};
