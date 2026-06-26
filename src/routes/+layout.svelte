@@ -33,7 +33,7 @@
 
 <svelte:head>
 	<title>team·health</title>
-	<meta property="og:site_name" content="team·health" />
+	<meta property="og:site_name" content="Twake" />
 	<meta property="og:type" content="website" />
 	<meta property="og:title" content="team·health — engineering metrics" />
 	<meta property="og:description" content="Live engineering-delivery metrics for any GitHub team: PR throughput, review depth, code volume, and release cadence." />
