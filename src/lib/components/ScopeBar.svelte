@@ -1,9 +1,14 @@
 <script lang="ts">
 	import { scope } from '$lib/client/scope.svelte';
 	import { metrics } from '$lib/client/metrics.svelte';
+	import { theme } from '$lib/client/theme.svelte';
 	import { signOut } from '@auth/sveltekit/client';
 	import * as Select from '$lib/components/ui/select';
-	import { Users, GitBranch, RefreshCw, Settings2, Power, Menu } from '@lucide/svelte';
+	import { Users, GitBranch, RefreshCw, Settings2, Power, Menu, Sun, Moon } from '@lucide/svelte';
+
+	$effect(() => {
+		theme.init();
+	});
 
 	let {
 		user,
@@ -66,6 +71,14 @@
 	</div>
 
 	<div class="ml-auto flex items-center gap-2">
+		<button
+			onclick={() => theme.toggle()}
+			class="rounded-lg border border-[var(--color-ink-300)] bg-[var(--color-card)] p-1.5 text-[var(--color-ink-600)] hover:border-[var(--color-ink-400)] hover:text-[var(--color-ink-900)]"
+			aria-label="Toggle dark mode"
+			title={theme.current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+		>
+			{#if theme.current === 'dark'}<Sun class="h-4 w-4" />{:else}<Moon class="h-4 w-4" />{/if}
+		</button>
 		<a
 			href="/teams"
 			class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-ink-300)] bg-[var(--color-card)] px-2.5 py-1.5 text-xs text-[var(--color-ink-800)] hover:border-[var(--color-ink-400)]"

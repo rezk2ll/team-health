@@ -65,6 +65,6 @@
 
 	<div class="flex items-center gap-3 border-t border-[var(--color-ink-300)] px-6 py-5">
 		<img src={twakeLogo} alt="Twake" class="h-6 w-6" />
-		<img src={linagoraLogo} alt="Linagora" class="h-5 w-auto opacity-80" />
+		<img src={linagoraLogo} alt="Linagora" class="logo-adapt h-5 w-auto opacity-80" />
 	</div>
 </aside>
