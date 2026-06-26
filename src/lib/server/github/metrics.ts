@@ -1,7 +1,7 @@
 import { type GraphQL } from './client';
 import { median, std, round, isBugLabel } from './stats';
 import { type Month, monthKey, monthStart, monthEnd } from './months';
-import type { Repo, Member, RepoMonth } from './types';
+import type { Repo, Member, RepoMonth, OpenPr } from './types';
 import type { MemberRepoMonthRow, ReviewRepoMonthRow } from '../store/assemble';
 
 // Heavy first:100 search aliases trip GitHub's per-query resource limit beyond
@@ -431,5 +431,48 @@ export async function fetchReviewRepoMonthRows(gql: GraphQL, repos: Repo[], mont
 			for (const [reviewer, v] of counts) out.push({ reviewer, owner, repo, month, reviews: v.reviews, comments: v.comments });
 		});
 	}
+	return out;
+}
+
+/** Currently-open PRs across the given repos (live, current state). Oldest first
+ * so a per-repo cap keeps the most-stuck ones. */
+export async function fetchOpenPullRequests(gql: GraphQL, repos: Repo[]): Promise<OpenPr[]> {
+	if (!repos.length) return [];
+	const blocks = repos.map(
+		({ owner, repo }, i) => `
+      op_${i}: search(query: "repo:${owner}/${repo} type:pr is:open sort:created-asc", type: ISSUE, first: 100) {
+        nodes { ... on PullRequest {
+          number title url isDraft createdAt updatedAt
+          author { login __typename }
+          reviewDecision
+          additions deletions
+          comments { totalCount }
+          reviews { totalCount }
+        } }
+      }`
+	);
+	const data = await runChunkedAliases(gql, blocks);
+	const out: OpenPr[] = [];
+	repos.forEach(({ owner, repo }, i) => {
+		for (const pr of data[`op_${i}`]?.nodes ?? []) {
+			if (!pr || typeof pr.number !== 'number') continue;
+			out.push({
+				repo: `${owner}/${repo}`,
+				number: pr.number,
+				title: pr.title ?? '',
+				url: pr.url ?? '',
+				author: pr.author?.login ?? 'unknown',
+				bot: pr.author?.__typename === 'Bot',
+				draft: !!pr.isDraft,
+				createdAt: pr.createdAt,
+				updatedAt: pr.updatedAt,
+				reviewDecision: pr.reviewDecision ?? null,
+				reviews: pr.reviews?.totalCount ?? 0,
+				comments: pr.comments?.totalCount ?? 0,
+				additions: pr.additions ?? 0,
+				deletions: pr.deletions ?? 0
+			});
+		}
+	});
 	return out;
 }

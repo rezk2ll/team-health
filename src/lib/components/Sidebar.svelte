@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { LayoutDashboard, Users, BarChart3, Globe, X } from '@lucide/svelte';
+	import { LayoutDashboard, Users, BarChart3, Globe, X, TriangleAlert } from '@lucide/svelte';
 	import linagoraLogo from '$lib/assets/linagora-logo.svg';
 	import twakeLogo from '$lib/assets/twake-logo.svg';
 
@@ -8,9 +8,10 @@
 
 	const nav = [
 		{ href: '/', label: 'Overview', icon: LayoutDashboard, kbd: '01' },
-		{ href: '/global', label: 'Global', icon: Globe, kbd: '02' },
-		{ href: '/teams', label: 'Teams', icon: Users, kbd: '03' },
-		{ href: '/charts', label: 'Charts', icon: BarChart3, kbd: '04' }
+		{ href: '/attention', label: 'Attention', icon: TriangleAlert, kbd: '02' },
+		{ href: '/global', label: 'Global', icon: Globe, kbd: '03' },
+		{ href: '/teams', label: 'Teams', icon: Users, kbd: '04' },
+		{ href: '/charts', label: 'Charts', icon: BarChart3, kbd: '05' }
 	];
 </script>
 
