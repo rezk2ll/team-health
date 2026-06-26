@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { graphql, RateLimitError } from './client';
 
-// $env/dynamic/private reads process.env at call time.
-process.env.GITHUB_TOKEN = 'test-token';
+// The client reads the token from $env/dynamic/private; mock it so the test is
+// deterministic with or without a local .env (CI has none).
+vi.mock('$env/dynamic/private', () => ({ env: { GITHUB_TOKEN: 'test-token' } }));
+
+const { graphql, RateLimitError } = await import('./client');
 
 const rateLimitResponse = () => ({
 	status: 200,
