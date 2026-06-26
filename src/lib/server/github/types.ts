@@ -57,3 +57,36 @@ export type Selection = {
 	/** Months of per-member history (commits/merged/reviews/tickets). */
 	memberMonths: number;
 };
+
+// ---- Attention worklist (live: currently-open PRs that need a human) --------
+export type OpenPr = {
+	repo: string; // owner/repo
+	number: number;
+	title: string;
+	url: string;
+	author: string; // login
+	bot: boolean; // author is a GitHub App/Bot (e.g. dependabot)
+	draft: boolean;
+	createdAt: string;
+	updatedAt: string;
+	reviewDecision: string | null; // APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED | null
+	reviews: number;
+	comments: number;
+	additions: number;
+	deletions: number;
+};
+
+export type AttentionReason = 'unreviewed' | 'changes_requested' | 'stale' | 'aging' | 'draft_stale';
+
+export type AttentionItem = OpenPr & {
+	ageDays: number; // since opened
+	idleDays: number; // since last activity
+	reasons: AttentionReason[];
+	priority: number; // higher = more in need of attention
+};
+
+export type AttentionResult = {
+	items: AttentionItem[];
+	summary: { total: number } & Record<AttentionReason, number>;
+	generatedAt: number;
+};

@@ -1,4 +1,4 @@
-import type { Selection } from './github/types';
+import type { Repo, Selection } from './github/types';
 import { parseMembers, parseRepos } from './validate';
 import { allowedOrgs } from './discovery';
 
@@ -25,4 +25,14 @@ export function parseSelection(body: unknown): Selection {
 		months: clamp(Number(b.months ?? 12), 1, 24),
 		memberMonths: clamp(Number(b.memberMonths ?? 3), 1, 12)
 	};
+}
+
+/** Validate just a repo list (same injection + allowed-org guards as selection). */
+export function parseRepoSelection(body: unknown): Repo[] {
+	const b = (body ?? {}) as Record<string, unknown>;
+	const repos = parseRepos(b.repos, MAX_REPOS, allowedOrgs());
+	if (repos.length === 0) {
+		throw new Error('at least one repository in an allowed organization is required');
+	}
+	return repos;
 }
