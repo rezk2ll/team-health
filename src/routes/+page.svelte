@@ -220,7 +220,7 @@
 							{#each topAuthors as [name, count] (name)}
 								<li>
 									<div class="flex items-baseline justify-between text-xs mb-1.5">
-										<span class="text-[var(--color-ink-900)]">{displayName(name)}</span>
+										<a href="/people/{name}" class="text-[var(--color-ink-900)] hover:text-[var(--color-brand)] hover:underline">{displayName(name)}</a>
 										<span class="font-mono tabular text-[var(--color-ink-600)]">{fmtNum(count)}</span>
 									</div>
 									<div class="h-1.5 w-full overflow-hidden rounded-full bg-[var(--color-ink-200)]">
@@ -247,7 +247,7 @@
 							{#each topLines as l (l.author)}
 								<li>
 									<div class="flex items-baseline justify-between gap-3 text-xs mb-1.5">
-										<span class="truncate text-[var(--color-ink-900)]">{displayName(l.author)}</span>
+										<a href="/people/{l.author}" class="truncate text-[var(--color-ink-900)] hover:text-[var(--color-brand)] hover:underline">{displayName(l.author)}</a>
 										<span class="font-mono tabular shrink-0">
 											<span class="text-[var(--color-positive)]">+{fmtNum(l.additions)}</span>
 											<span class="text-[var(--color-negative)]">−{fmtNum(l.deletions)}</span>

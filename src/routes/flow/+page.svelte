@@ -97,7 +97,7 @@
 						{#each data.reviewerLoad as r (r.reviewer)}
 							<li>
 								<div class="mb-1.5 flex items-baseline justify-between text-xs">
-									<span class="text-[var(--color-ink-900)]">{name(r.reviewer)}</span>
+									<a href="/people/{r.reviewer}" class="text-[var(--color-ink-900)] hover:text-[var(--color-brand)] hover:underline">{name(r.reviewer)}</a>
 									<span class="font-mono tabular text-[var(--color-ink-600)]">{fmtNum(r.prs)} PRs</span>
 								</div>
 								<div class="h-1.5 w-full overflow-hidden rounded-full bg-[var(--color-ink-200)]">
