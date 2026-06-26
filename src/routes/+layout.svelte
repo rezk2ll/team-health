@@ -17,7 +17,7 @@
 		const p = page.url.pathname;
 		if (p.startsWith('/attention')) return { loading: attention.loading, refresh: () => attention.reload() };
 		if (p.startsWith('/flow')) return { loading: flow.loading, refresh: () => flow.reload() };
-		if (p.startsWith('/global')) return { loading: globalMetrics.loading, refresh: () => globalMetrics.reload() };
+		if (p.startsWith('/global') || p.startsWith('/breakdown')) return { loading: globalMetrics.loading, refresh: () => globalMetrics.reload() };
 		return { loading: metrics.loading, refresh: () => scope.reload() };
 	});
 	const loading = $derived(active.loading);
@@ -29,6 +29,7 @@
 		if (p.startsWith('/attention')) return 'Attention';
 		if (p.startsWith('/flow')) return 'Flow';
 		if (p.startsWith('/global')) return 'Global trends';
+		if (p.startsWith('/breakdown')) return 'Breakdown';
 		if (p.startsWith('/teams')) return 'Teams';
 		if (p.startsWith('/charts')) return 'Charts';
 		if (p.startsWith('/auth')) return 'Sign in';
