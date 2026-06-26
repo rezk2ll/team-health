@@ -11,8 +11,13 @@ import {
 	DEFAULT_TEAM_ID,
 	type Team
 } from './selection';
+import { replaceSearchParams } from './url';
 import { metrics, selectionFor, redirectToSignIn } from './metrics.svelte';
 import type { Member, Repo } from '$lib/server/github/types';
+
+// A shared/bookmarked link can carry any value; cap it so a stray ?window=1e9
+// can't drive an enormous metrics query.
+const MAX_WINDOW = 60;
 
 type TeamInput = { name: string; members: Member[]; repos: Repo[] };
 
@@ -32,7 +37,7 @@ class ScopeStore {
 		return this.teams.filter((t) => !t.builtin);
 	}
 
-	async init(builtins: Team[], persisted: boolean): Promise<void> {
+	async init(builtins: Team[], persisted: boolean, url?: URL): Promise<void> {
 		if (this.initialized) return;
 		this.initialized = true;
 		this.#builtins = builtins;
@@ -56,14 +61,36 @@ class ScopeStore {
 		// Default window comes from server config (set on this.months before init); use
 		// it as the fallback so a first-time visitor honors DEFAULT_MONTHS/MEMBER_MONTHS.
 		const s = loadScope({ teamId: fallbackId, months: this.months, memberMonths: this.memberMonths });
-		this.activeTeamId = this.teams.some((t) => t.id === s.teamId) ? s.teamId : fallbackId;
-		this.months = s.months;
-		this.memberMonths = s.memberMonths;
+		// Precedence: URL query param (a shared/bookmarked link) > localStorage > config.
+		const urlTeam = url?.searchParams.get('team');
+		const urlMonths = Number(url?.searchParams.get('window'));
+		const validUrlMonths = Number.isInteger(urlMonths) && urlMonths > 0 && urlMonths <= MAX_WINDOW;
+		this.activeTeamId =
+			urlTeam && this.teams.some((t) => t.id === urlTeam)
+				? urlTeam
+				: this.teams.some((t) => t.id === s.teamId)
+					? s.teamId
+					: fallbackId;
+		this.months = validUrlMonths ? urlMonths : s.months;
+		this.memberMonths = Math.min(s.memberMonths, this.months);
+		this.#persistPrefs();
+		this.syncUrl();
 		this.reload();
 	}
 
 	#persistPrefs(): void {
 		saveScope({ teamId: this.activeTeamId, months: this.months, memberMonths: this.memberMonths });
+	}
+
+	/** Mirror the active scope into the URL query string (replace, no history entry)
+	 * so the current view is a shareable, bookmarkable link. Only writes when the
+	 * search actually changes, so it is safe to call from a navigation effect. */
+	syncUrl(): void {
+		if (!this.initialized) return;
+		replaceSearchParams((params) => {
+			params.set('team', this.activeTeamId);
+			params.set('window', String(this.months));
+		});
 	}
 	#persistLocalTeams(): void {
 		if (!this.persisted) saveTeams(this.teams);
@@ -77,12 +104,14 @@ class ScopeStore {
 	setTeam(id: string): void {
 		this.activeTeamId = id;
 		this.#persistPrefs();
+		this.syncUrl();
 		this.reload();
 	}
 	setWindow(months: number, memberMonths = this.memberMonths): void {
 		this.months = months;
 		this.memberMonths = Math.min(memberMonths, months);
 		this.#persistPrefs();
+		this.syncUrl();
 		this.reload();
 	}
 

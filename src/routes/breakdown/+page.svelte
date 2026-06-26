@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import Topbar from '$lib/components/Topbar.svelte';
 	import OrgTrendView from '$lib/components/OrgTrendView.svelte';
 	import * as Card from '$lib/components/ui/card';
@@ -7,7 +8,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import { globalMetrics } from '$lib/client/metrics.svelte';
 	import { scope } from '$lib/client/scope.svelte';
-	import { repoKey } from '$lib/client/selection';
+	import { repoKey, parseList } from '$lib/client/selection';
+	import { replaceSearchParams } from '$lib/client/url';
 	import { orgTrend, type OrgMonth } from '$lib/charts';
 	import { pluralize } from '$lib/utils';
 	import type { Repo } from '$lib/server/github/types';
@@ -29,13 +31,21 @@
 		{ k: 'team', l: 'Team' },
 		{ k: 'repo', l: 'Repo' }
 	];
-	let mode = $state<Mode>('team');
-	let teamIds = $state<string[]>([]);
-	let repoKeys = $state<string[]>([]);
+
+	// Initialize from the URL so a shared/bookmarked Breakdown link restores the
+	// exact scope. Reading page.url at setup works on both the server and client.
+	const initParams = page.url.searchParams;
+	const initMode: Mode = initParams.get('bmode') === 'repo' ? 'repo' : 'team';
+	const initTeams = parseList(initParams.get('bteams'));
+	const initRepos = parseList(initParams.get('brepos'));
+	let mode = $state<Mode>(initMode);
+	let teamIds = $state<string[]>(initTeams);
+	let repoKeys = $state<string[]>(initRepos);
 
 	// Seed the team selection once teams are available: the scope bar's active team
-	// (else the first team). After this the user is free to clear the selection.
-	let seeded = $state(false);
+	// (else the first team). Skipped only when the URL already carried a selection,
+	// so a bare ?bmode link still auto-seeds instead of showing an empty view.
+	let seeded = $state(initTeams.length > 0 || initRepos.length > 0);
 	$effect(() => {
 		if (!seeded && scope.teams.length) {
 			const id = scope.activeTeam?.id ?? scope.teams[0]?.id;
@@ -44,6 +54,22 @@
 				seeded = true;
 			}
 		}
+	});
+
+	// Mirror the selection into the URL (replace, no history entry), preserving the
+	// scope params the layout manages. Only writes on an actual change.
+	// Track selection changes (reading the state here registers the dependencies) and
+	// mirror them into the URL, merging with the scope params the layout manages.
+	$effect(() => {
+		const teams = mode === 'team' ? teamIds : [];
+		const repos = mode === 'repo' ? repoKeys : [];
+		replaceSearchParams((params) => {
+			params.set('bmode', mode);
+			if (teams.length) params.set('bteams', teams.join(','));
+			else params.delete('bteams');
+			if (repos.length) params.set('brepos', repos.join(','));
+			else params.delete('brepos');
+		});
 	});
 
 	// The repo-key set the current scope resolves to (union of selected teams' repos,
