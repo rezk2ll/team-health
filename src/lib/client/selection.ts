@@ -14,6 +14,8 @@ export type Scope = {
 	teamId: string;
 	months: number;
 	memberMonths: number;
+	/** End month of the window, "YYYY-MM". Empty/absent = rolling (current month). */
+	to?: string;
 };
 
 const TEAMS_KEY = 'team-health:teams';

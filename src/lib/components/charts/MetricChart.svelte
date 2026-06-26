@@ -4,6 +4,7 @@
 	import * as Chart from '$lib/components/ui/chart';
 	import type { ChartConfig } from '$lib/components/ui/chart';
 	import { fmtMonth } from '$lib/utils';
+	import { isMonthKey } from '$lib/months';
 
 	type Series = { key: string; label: string; color: string };
 
@@ -26,9 +27,6 @@
 		legend?: boolean;
 		class?: string;
 	} = $props();
-
-	const isMonthKey = (v: unknown): v is string =>
-		typeof v === 'string' && /^\d{4}-\d{2}$/.test(v);
 
 	// Default x formatter: "2025-05" -> "May 25"; anything else passes through.
 	const formatX = (v: unknown) =>

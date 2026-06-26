@@ -13,11 +13,13 @@ import {
 } from './selection';
 import { replaceSearchParams } from './url';
 import { metrics, selectionFor, redirectToSignIn } from './metrics.svelte';
+import { monthKeyOf, addMonths, monthList, isMonthKey } from '$lib/months';
 import type { Member, Repo } from '$lib/server/github/types';
 
-// A shared/bookmarked link can carry any value; cap it so a stray ?window=1e9
-// can't drive an enormous metrics query.
-const MAX_WINDOW = 60;
+// The server clamps a window to 24 months, so the client matches it: the range
+// picker caps there and a stray ?window=1e9 from a shared link is clamped too,
+// keeping the displayed range length in sync with the data the server returns.
+const RANGE_MAX = 24;
 
 type TeamInput = { name: string; members: Member[]; repos: Repo[] };
 
@@ -26,12 +28,22 @@ class ScopeStore {
 	activeTeamId = $state<string>(DEFAULT_TEAM_ID);
 	months = $state(12);
 	memberMonths = $state(3);
+	// End month of the window, "YYYY-MM". Empty = the current month (rolling).
+	to = $state('');
 	initialized = $state(false);
 	persisted = $state(false);
 	#builtins: Team[] = [];
 
 	get activeTeam(): Team {
 		return this.teams.find((t) => t.id === this.activeTeamId) ?? this.teams[0];
+	}
+	/** Effective end month of the window (current month when rolling). */
+	get rangeTo(): string {
+		return this.to || monthKeyOf();
+	}
+	/** Effective start month of the window. */
+	get rangeFrom(): string {
+		return addMonths(this.rangeTo, -(this.months - 1));
 	}
 	get customTeams(): Team[] {
 		return this.teams.filter((t) => !t.builtin);
@@ -64,22 +76,31 @@ class ScopeStore {
 		// Precedence: URL query param (a shared/bookmarked link) > localStorage > config.
 		const urlTeam = url?.searchParams.get('team');
 		const urlMonths = Number(url?.searchParams.get('window'));
-		const validUrlMonths = Number.isInteger(urlMonths) && urlMonths > 0 && urlMonths <= MAX_WINDOW;
+		const validUrlMonths = Number.isInteger(urlMonths) && urlMonths > 0;
+		const urlTo = url?.searchParams.get('to') ?? '';
 		this.activeTeamId =
 			urlTeam && this.teams.some((t) => t.id === urlTeam)
 				? urlTeam
 				: this.teams.some((t) => t.id === s.teamId)
 					? s.teamId
 					: fallbackId;
-		this.months = validUrlMonths ? urlMonths : s.months;
+		// Clamp to the server's max so the displayed range can't exceed the data.
+		this.months = Math.min(Math.max(1, validUrlMonths ? urlMonths : s.months), RANGE_MAX);
 		this.memberMonths = Math.min(s.memberMonths, this.months);
+		// End month: URL > localStorage > rolling (current month).
+		this.to = isMonthKey(urlTo) ? urlTo : isMonthKey(s.to) ? s.to : '';
 		this.#persistPrefs();
 		this.syncUrl();
 		this.reload();
 	}
 
 	#persistPrefs(): void {
-		saveScope({ teamId: this.activeTeamId, months: this.months, memberMonths: this.memberMonths });
+		saveScope({
+			teamId: this.activeTeamId,
+			months: this.months,
+			memberMonths: this.memberMonths,
+			to: this.to
+		});
 	}
 
 	/** Mirror the active scope into the URL query string (replace, no history entry)
@@ -90,6 +111,8 @@ class ScopeStore {
 		replaceSearchParams((params) => {
 			params.set('team', this.activeTeamId);
 			params.set('window', String(this.months));
+			if (this.to) params.set('to', this.to);
+			else params.delete('to');
 		});
 	}
 	#persistLocalTeams(): void {
@@ -98,7 +121,8 @@ class ScopeStore {
 
 	reload(): void {
 		const t = this.activeTeam;
-		if (t?.repos.length) metrics.load(selectionFor(t, this.months, this.memberMonths));
+		if (t?.repos.length)
+			metrics.load(selectionFor(t, this.months, this.memberMonths, this.to || undefined));
 	}
 
 	setTeam(id: string): void {
@@ -107,9 +131,16 @@ class ScopeStore {
 		this.syncUrl();
 		this.reload();
 	}
-	setWindow(months: number, memberMonths = this.memberMonths): void {
-		this.months = months;
-		this.memberMonths = Math.min(memberMonths, months);
+
+	/** Set the window to an arbitrary [from, to] month range (order-independent),
+	 * capped at RANGE_MAX months. A range ending at the current month stays rolling. */
+	setRange(fromKey: string, toKey: string): void {
+		const list = monthList(fromKey, toKey); // ascending, inclusive
+		const window = list.slice(-RANGE_MAX); // cap length, keep the latest months
+		const latest = window[window.length - 1];
+		this.months = window.length;
+		this.to = latest === monthKeyOf() ? '' : latest;
+		this.memberMonths = Math.min(this.memberMonths, this.months);
 		this.#persistPrefs();
 		this.syncUrl();
 		this.reload();

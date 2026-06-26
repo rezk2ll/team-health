@@ -52,10 +52,12 @@ export type MetricsResult = {
 export type Selection = {
 	repos: Repo[];
 	members: Member[];
-	/** Months of repo history (incl. current). */
+	/** Number of months in the window (length of the range). */
 	months: number;
 	/** Months of per-member history (commits/merged/reviews/tickets). */
 	memberMonths: number;
+	/** End month of the window, "YYYY-MM". Omitted = the current month (rolling). */
+	to?: string;
 };
 
 // ---- Attention worklist (live: currently-open PRs that need a human) --------

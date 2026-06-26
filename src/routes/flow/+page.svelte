@@ -4,14 +4,18 @@
 	import MetricChart from '$lib/components/charts/MetricChart.svelte';
 	import { scope } from '$lib/client/scope.svelte';
 	import { flow } from '$lib/client/flow.svelte';
-	import { fmtNum } from '$lib/utils';
+	import { fmtNum, fmtMonth } from '$lib/utils';
 	import { AlertCircle, Loader2 } from '@lucide/svelte';
 
 	const team = $derived(scope.activeTeam);
+	// "the last N months" when rolling, else "N months ending <Month>".
+	const windowLabel = $derived(
+		scope.to ? `${scope.months} months ending ${fmtMonth(scope.to)}` : `the last ${scope.months} months`
+	);
 
 	$effect(() => {
 		const repos = team?.repos ?? [];
-		if (repos.length) flow.ensure(repos, scope.months);
+		if (repos.length) flow.ensure(repos, scope.months, scope.to || undefined);
 	});
 
 	const data = $derived(flow.data);
@@ -38,7 +42,7 @@
 <Topbar
 	eyebrow="Flow"
 	title="Where PRs get stuck"
-	subtitle="Cycle time and review health for {team?.name ?? 'your team'} over the last {scope.months} months."
+	subtitle="Cycle time and review health for {team?.name ?? 'your team'} over {windowLabel}."
 />
 
 <div class="px-4 py-6 sm:px-6 lg:px-10 lg:py-10">

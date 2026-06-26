@@ -7,7 +7,7 @@
 // With no DATABASE_URL it falls back to fetching everything live every time.
 import { env } from '$env/dynamic/private';
 import { graphql, type GraphQL } from './github/client';
-import { lastNMonths, monthKey, monthEndMs, type Month } from './github/months';
+import { lastNMonths, monthsEndingAt, monthKey, monthEndMs, type Month } from './github/months';
 import {
 	fetchRepoMonthRows,
 	fetchMemberRepoMonthRows,
@@ -57,8 +57,14 @@ export async function getReport(
 	now: Date = new Date(),
 	gql: GraphQL = graphql
 ): Promise<MetricsResult> {
-	const months = lastNMonths(selection.months, now);
-	const memberMonths = lastNMonths(Math.min(selection.memberMonths, selection.months), now);
+	const memberCount = Math.min(selection.memberMonths, selection.months);
+	// An explicit `to` ends the window at that month; otherwise it rolls with now.
+	const months = selection.to
+		? monthsEndingAt(selection.to, selection.months)
+		: lastNMonths(selection.months, now);
+	const memberMonths = selection.to
+		? monthsEndingAt(selection.to, memberCount)
+		: lastNMonths(memberCount, now);
 	const currentKey = monthKey({ year: now.getUTCFullYear(), month: now.getUTCMonth() + 1 });
 	const nowMs = now.getTime();
 

@@ -1,0 +1,45 @@
+import { describe, it, expect } from 'vitest';
+import { isMonthKey, monthKeyOf, addMonths, monthCount, monthList, recentMonthKeys } from './months';
+
+describe('month key helpers', () => {
+	it('validates YYYY-MM keys', () => {
+		expect(isMonthKey('2026-06')).toBe(true);
+		expect(isMonthKey('2026-12')).toBe(true);
+		expect(isMonthKey('2026-01')).toBe(true);
+		expect(isMonthKey('2026-6')).toBe(false);
+		expect(isMonthKey('2026-13')).toBe(false); // month out of range
+		expect(isMonthKey('2026-00')).toBe(false);
+		expect(isMonthKey('nope')).toBe(false);
+		expect(isMonthKey(undefined)).toBe(false);
+	});
+
+	it('formats a date as a UTC month key', () => {
+		expect(monthKeyOf(new Date('2026-06-15T12:00:00Z'))).toBe('2026-06');
+		expect(monthKeyOf(new Date('2026-01-01T00:00:00Z'))).toBe('2026-01');
+	});
+
+	it('adds months across year boundaries', () => {
+		expect(addMonths('2026-06', 1)).toBe('2026-07');
+		expect(addMonths('2026-01', -1)).toBe('2025-12');
+		expect(addMonths('2026-06', -12)).toBe('2025-06');
+		expect(addMonths('2026-11', 3)).toBe('2027-02');
+	});
+
+	it('counts months inclusively, order-independent', () => {
+		expect(monthCount('2026-06', '2026-06')).toBe(1);
+		expect(monthCount('2026-01', '2026-06')).toBe(6);
+		expect(monthCount('2026-06', '2026-01')).toBe(6);
+	});
+
+	it('lists months ascending and inclusive, order-independent', () => {
+		expect(monthList('2026-04', '2026-06')).toEqual(['2026-04', '2026-05', '2026-06']);
+		expect(monthList('2026-06', '2026-04')).toEqual(['2026-04', '2026-05', '2026-06']);
+		expect(monthList('2025-12', '2026-01')).toEqual(['2025-12', '2026-01']);
+	});
+
+	it('builds the last N month keys ending at now', () => {
+		const now = new Date('2026-06-15T00:00:00Z');
+		expect(recentMonthKeys(3, now)).toEqual(['2026-04', '2026-05', '2026-06']);
+		expect(recentMonthKeys(1, now)).toEqual(['2026-06']);
+	});
+});

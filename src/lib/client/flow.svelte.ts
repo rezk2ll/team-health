@@ -9,15 +9,15 @@ class FlowStore {
 	data = $state<FlowResult | null>(null);
 	#seq = 0;
 	#key = '';
-	#last: { repos: Repo[]; months: number } | null = null;
+	#last: { repos: Repo[]; months: number; to?: string } | null = null;
 
 	reload(): void {
-		if (this.#last) this.load(this.#last.repos, this.#last.months);
+		if (this.#last) this.load(this.#last.repos, this.#last.months, this.#last.to);
 	}
 
-	async load(repos: Repo[], months: number): Promise<void> {
-		this.#last = { repos, months };
-		const key = JSON.stringify({ r: repos.map((x) => `${x.owner}/${x.repo}`).sort(), months });
+	async load(repos: Repo[], months: number, to?: string): Promise<void> {
+		this.#last = { repos, months, to };
+		const key = JSON.stringify({ r: repos.map((x) => `${x.owner}/${x.repo}`).sort(), months, to });
 		this.#key = key;
 		const seq = ++this.#seq;
 		this.loading = true;
@@ -26,7 +26,7 @@ class FlowStore {
 			const res = await fetch('/api/flow', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ repos, months })
+				body: JSON.stringify({ repos, months, ...(to ? { to } : {}) })
 			});
 			if (seq !== this.#seq) return;
 			if (res.status === 401) return redirectToSignIn();
@@ -42,9 +42,9 @@ class FlowStore {
 		}
 	}
 
-	ensure(repos: Repo[], months: number): void {
-		const key = JSON.stringify({ r: repos.map((x) => `${x.owner}/${x.repo}`).sort(), months });
-		if (key !== this.#key || (!this.data && !this.loading)) this.load(repos, months);
+	ensure(repos: Repo[], months: number, to?: string): void {
+		const key = JSON.stringify({ r: repos.map((x) => `${x.owner}/${x.repo}`).sort(), months, to });
+		if (key !== this.#key || (!this.data && !this.loading)) this.load(repos, months, to);
 	}
 }
 

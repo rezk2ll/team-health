@@ -1,6 +1,7 @@
 import type { Repo, Selection } from './github/types';
 import { parseMembers, parseRepos } from './validate';
 import { allowedOrgs } from './discovery';
+import { isMonthKey } from '$lib/months';
 
 const MAX_REPOS = 40;
 const MAX_MEMBERS = 60;
@@ -22,11 +23,14 @@ export function parseSelection(body: unknown): Selection {
 		throw new Error('selection must include at least one repository in an allowed organization');
 	}
 
+	const to = isMonthKey(b.to) ? b.to : undefined;
+
 	return {
 		repos,
 		members,
 		months: clamp(num(b.months, 12), 1, 24),
-		memberMonths: clamp(num(b.memberMonths, 3), 1, 12)
+		memberMonths: clamp(num(b.memberMonths, 3), 1, 12),
+		...(to ? { to } : {})
 	};
 }
 

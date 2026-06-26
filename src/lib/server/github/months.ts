@@ -1,6 +1,19 @@
+import { monthList, addMonths } from '$lib/months';
+
 export type Month = { year: number; month: number }; // month is 1-12
 
 const pad = (n: number) => String(n).padStart(2, '0');
+
+/** Parse a "YYYY-MM" key into a Month. */
+export function parseMonthKey(key: string): Month {
+	const [year, month] = key.split('-').map(Number);
+	return { year, month };
+}
+
+/** The `n` months ending at (and including) `toKey`, ascending. */
+export function monthsEndingAt(toKey: string, n: number): Month[] {
+	return monthList(addMonths(toKey, -(n - 1)), toKey).map(parseMonthKey);
+}
 
 /** "YYYY-MM" key for a month. */
 export const monthKey = (m: Month) => `${m.year}-${pad(m.month)}`;

@@ -1,6 +1,6 @@
 import { graphql, type GraphQL } from './github/client';
 import { fetchPrFlow } from './github/metrics';
-import { lastNMonths, monthKey } from './github/months';
+import { lastNMonths, monthsEndingAt, monthKey } from './github/months';
 import { median, round } from './github/stats';
 import type { Repo, PrFlow, FlowStats, FlowResult } from './github/types';
 
@@ -33,8 +33,14 @@ export function computeFlow(prs: PrFlow[], months: string[], now: number): FlowR
 	return { overall: statsFor(prs), byMonth, reviewerLoad, generatedAt: now };
 }
 
-export async function getFlowReport(repos: Repo[], months: number, now: Date = new Date(), gql: GraphQL = graphql): Promise<FlowResult> {
-	const ms = lastNMonths(months, now);
+export async function getFlowReport(
+	repos: Repo[],
+	months: number,
+	to?: string,
+	now: Date = new Date(),
+	gql: GraphQL = graphql
+): Promise<FlowResult> {
+	const ms = to ? monthsEndingAt(to, months) : lastNMonths(months, now);
 	const prs = await fetchPrFlow(gql, repos, ms);
 	return computeFlow(prs, ms.map(monthKey), now.getTime());
 }

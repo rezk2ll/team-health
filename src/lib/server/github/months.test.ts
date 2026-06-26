@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { monthKey, monthStart, monthEnd, lastNMonths } from './months';
+import { monthKey, monthStart, monthEnd, lastNMonths, monthsEndingAt, parseMonthKey } from './months';
 
 describe('monthEnd', () => {
 	it('handles 30/31-day months and leap-year February', () => {
@@ -32,5 +32,22 @@ describe('lastNMonths', () => {
 		// Just before UTC midnight on the 1st: still January in UTC.
 		const ms = lastNMonths(1, new Date('2026-01-01T00:30:00Z'));
 		expect(ms.map(monthKey)).toEqual(['2026-01']);
+	});
+});
+
+describe('monthsEndingAt', () => {
+	it('returns n ascending months ending at the given key', () => {
+		expect(monthsEndingAt('2025-12', 3).map(monthKey)).toEqual(['2025-10', '2025-11', '2025-12']);
+		expect(monthsEndingAt('2026-02', 4).map(monthKey)).toEqual([
+			'2025-11',
+			'2025-12',
+			'2026-01',
+			'2026-02'
+		]);
+	});
+
+	it('parseMonthKey round-trips with monthKey', () => {
+		expect(parseMonthKey('2026-03')).toEqual({ year: 2026, month: 3 });
+		expect(monthKey(parseMonthKey('2025-11'))).toBe('2025-11');
 	});
 });
