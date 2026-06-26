@@ -1,0 +1,134 @@
+<script lang="ts">
+	import { BarChart, LineChart, AreaChart } from 'layerchart';
+	import { curveMonotoneX } from 'd3-shape';
+	import * as Chart from '$lib/components/ui/chart';
+	import type { ChartConfig } from '$lib/components/ui/chart';
+	import { fmtMonth } from '$lib/utils';
+
+	type Series = { key: string; label: string; color: string };
+
+	let {
+		data,
+		x = 'month',
+		series,
+		kind = 'line',
+		seriesLayout,
+		xFormat,
+		legend = true,
+		class: className = 'aspect-[5/3] w-full'
+	}: {
+		data: Record<string, unknown>[];
+		x?: string;
+		series: Series[];
+		kind?: 'line' | 'area' | 'bar';
+		seriesLayout?: 'overlap' | 'stack' | 'group';
+		xFormat?: (v: unknown) => string;
+		legend?: boolean;
+		class?: string;
+	} = $props();
+
+	const isMonthKey = (v: unknown): v is string =>
+		typeof v === 'string' && /^\d{4}-\d{2}$/.test(v);
+
+	// Default x formatter: "2025-05" -> "May 25"; anything else passes through.
+	const formatX = (v: unknown) =>
+		xFormat ? xFormat(v) : isMonthKey(v) ? fmtMonth(v) : String(v);
+
+	// Compact value-axis labels: 1280 -> "1.3k".
+	const formatY = (v: unknown) => {
+		const n = Number(v);
+		if (!Number.isFinite(n)) return '';
+		const abs = Math.abs(n);
+		if (abs >= 1000) return `${(n / 1000).toFixed(abs >= 10000 ? 0 : 1)}k`;
+		return `${n}`;
+	};
+
+	// Thin out crowded x-axis labels to ~6 evenly spaced ticks.
+	const xTicks = $derived.by(() => {
+		const vals = data.map((d) => d[x]);
+		if (vals.length <= 7) return undefined;
+		const step = Math.ceil(vals.length / 6);
+		return vals.filter((_, i) => i % step === 0);
+	});
+
+	// chart-style.svelte emits `--color-<key>` from each config entry's color.
+	const config = $derived(
+		Object.fromEntries(series.map((s) => [s.key, { label: s.label, color: s.color }])) as ChartConfig
+	);
+	const lcSeries = $derived(
+		series.map((s) => ({ key: s.key, label: s.label, color: `var(--color-${s.key})` }))
+	);
+
+	const tickLabel = { class: 'fill-[var(--color-ink-600)] text-[10px]' };
+	const axisProps = $derived({
+		xAxis: { ticks: xTicks, format: formatX, tickLabelProps: tickLabel },
+		yAxis: { ticks: 4, format: formatY, tickLabelProps: tickLabel },
+		grid: { class: 'stroke-[var(--color-ink-300)]', 'stroke-dasharray': '2 4' }
+	});
+</script>
+
+<div class="flex flex-col gap-3">
+	{#if legend && series.length > 1}
+		<div class="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+			{#each series as s (s.key)}
+				<span class="flex items-center gap-2">
+					<span class="h-2 w-2 rounded-[2px]" style="background: {s.color}"></span>
+					<span class="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-ink-700)]">
+						{s.label}
+					</span>
+				</span>
+			{/each}
+		</div>
+	{/if}
+
+	<Chart.Container {config} class={className}>
+		{#if kind === 'bar'}
+			<BarChart
+				{data}
+				{x}
+				series={lcSeries}
+				seriesLayout={seriesLayout ?? 'group'}
+				grid={{ y: true, x: false }}
+				bandPadding={0.32}
+				groupPadding={0.18}
+				props={{ ...axisProps, bars: { stroke: 'none', radius: 3, rounded: 'top' } }}
+			>
+				{#snippet tooltip()}
+					<Chart.Tooltip indicator="dot" />
+				{/snippet}
+			</BarChart>
+		{:else if kind === 'area'}
+			<AreaChart
+				{data}
+				{x}
+				series={lcSeries}
+				seriesLayout={seriesLayout === 'group' ? 'overlap' : (seriesLayout ?? 'overlap')}
+				grid={{ y: true, x: false }}
+				props={{
+					...axisProps,
+					area: { curve: curveMonotoneX, 'fill-opacity': 0.14, line: { class: 'stroke-2' } }
+				}}
+			>
+				{#snippet tooltip()}
+					<Chart.Tooltip indicator="line" />
+				{/snippet}
+			</AreaChart>
+		{:else}
+			<LineChart
+				{data}
+				{x}
+				series={lcSeries}
+				grid={{ y: true, x: false }}
+				props={{
+					...axisProps,
+					spline: { curve: curveMonotoneX, class: 'stroke-2' },
+					highlight: { points: { r: 3 } }
+				}}
+			>
+				{#snippet tooltip()}
+					<Chart.Tooltip indicator="line" />
+				{/snippet}
+			</LineChart>
+		{/if}
+	</Chart.Container>
+</div>

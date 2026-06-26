@@ -1,0 +1,10 @@
+node_modules
+build
+.svelte-kit
+.env
+.env.*
+scratchpad
+.playwright-mcp
+*.log
+.git
+.vscode

@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1782460411869,
+      "tag": "0000_peaceful_nighthawk",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782464643584,
+      "tag": "0001_secret_menace",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782470809328,
+      "tag": "0002_wet_marvel_apes",
+      "breakpoints": true
+    }
+  ]
+}
