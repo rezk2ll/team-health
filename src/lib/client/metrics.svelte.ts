@@ -3,8 +3,13 @@
 import type { MetricsResult, Selection } from '$lib/server/github/types';
 import type { Team } from './selection';
 
-export function selectionFor(team: Team, months: number, memberMonths: number): Selection {
-	return { repos: team.repos, members: team.members, months, memberMonths };
+export function selectionFor(
+	team: Team,
+	months: number,
+	memberMonths: number,
+	to?: string
+): Selection {
+	return { repos: team.repos, members: team.members, months, memberMonths, ...(to ? { to } : {}) };
 }
 
 /** Session expired: bounce to sign-in so the user re-authenticates instead of

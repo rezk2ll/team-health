@@ -11,7 +11,8 @@ function selectionKey(s: Selection): string {
 		repos: s.repos.map((r) => `${r.owner}/${r.repo}`).sort(),
 		members: s.members.map((m) => m.login).sort(),
 		months: s.months,
-		memberMonths: s.memberMonths
+		memberMonths: s.memberMonths,
+		to: s.to ?? null
 	});
 }
 
