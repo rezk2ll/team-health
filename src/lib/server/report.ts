@@ -85,6 +85,10 @@ export async function getReport(
 		resolveRepoAndReview(gql, selection.repos, months, currentKey, nowMs),
 		resolveMembers(gql, selection.repos, selection.members, memberMonths, currentKey, nowMs)
 	]);
+	// If a refresh failed and the store had nothing to fall back on, there's no
+	// report to serve — surface the error (rate limit, etc.) instead of a blank one.
+	if (!repoRes.repoRows.length && repoRes.fetchError) throw repoRes.fetchError;
+
 	// Reviews are member activity, so scope them to the member window — matching the
 	// no-DB path (which fetches reviews for memberMonths only).
 	const memberMonthKeys = new Set(memberMonths.map(monthKey));
@@ -110,7 +114,12 @@ async function resolveRepoAndReview(
 	months: Month[],
 	currentKey: string,
 	nowMs: number
-): Promise<{ repoRows: RepoMonth[]; reviewRows: ReviewRepoMonthRow[]; fetched: number }> {
+): Promise<{
+	repoRows: RepoMonth[];
+	reviewRows: ReviewRepoMonthRow[];
+	fetched: number;
+	fetchError?: unknown;
+}> {
 	const keys = months.map(monthKey);
 	const fetchedAt = await store.repoMonthFetchedAt(repos, keys);
 	const stale = monthsToFetch(
@@ -121,19 +130,27 @@ async function resolveRepoAndReview(
 		nowMs
 	);
 
+	let fetchError: unknown;
 	if (stale.length) {
-		const [repoRows, reviewRows] = await Promise.all([
-			fetchRepoMonthRows(gql, repos, stale),
-			fetchReviewRepoMonthRows(gql, repos, stale)
-		]);
-		await Promise.all([store.upsertRepoMonths(repoRows), store.upsertReviewRepoMonths(reviewRows)]);
+		try {
+			const [repoRows, reviewRows] = await Promise.all([
+				fetchRepoMonthRows(gql, repos, stale),
+				fetchReviewRepoMonthRows(gql, repos, stale)
+			]);
+			await Promise.all([store.upsertRepoMonths(repoRows), store.upsertReviewRepoMonths(reviewRows)]);
+		} catch (e) {
+			// Degrade gracefully: a failed refresh (e.g. rate limit) shouldn't sink the
+			// whole report when the store already holds usable (if slightly stale) data.
+			fetchError = e;
+			console.warn(`[report] repo refresh failed, serving stored data: ${(e as Error).message}`);
+		}
 	}
 
 	const [repoRows, reviewRows] = await Promise.all([
 		store.getRepoMonths(repos, keys),
 		store.getReviewRepoMonths(repos, keys)
 	]);
-	return { repoRows, reviewRows, fetched: stale.length };
+	return { repoRows, reviewRows, fetched: stale.length, fetchError };
 }
 
 // member_repo_month: same staleness rule, per (member, repo, month). Zeros are
@@ -159,8 +176,13 @@ async function resolveMembers(
 	);
 
 	if (stale.length) {
-		const fetched = await fetchMemberRepoMonthRows(gql, repos, members, stale);
-		await store.upsertMemberRepoMonths(fillMemberGrid(members, repos, stale, fetched));
+		try {
+			const fetched = await fetchMemberRepoMonthRows(gql, repos, members, stale);
+			await store.upsertMemberRepoMonths(fillMemberGrid(members, repos, stale, fetched));
+		} catch (e) {
+			// Member stats are non-essential; never let a failed refresh sink the report.
+			console.warn(`[report] member refresh failed, serving stored data: ${(e as Error).message}`);
+		}
 	}
 
 	const rows = await store.getMemberRepoMonths(logins, repos, keys);
