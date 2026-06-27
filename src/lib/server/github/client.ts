@@ -2,6 +2,10 @@ import { env } from '$env/dynamic/private';
 
 const ENDPOINT = 'https://api.github.com/graphql';
 const RETRY_DELAYS_MS = [0, 1000, 3000, 8000];
+// How long to pause ALL calls after a secondary (abuse) rate limit, when GitHub
+// doesn't send a Retry-After. Coordinated so a burst self-throttles instead of
+// every call retrying into the same wall.
+const SECONDARY_COOLDOWN_MS = 20_000;
 // Shared cap on in-flight GraphQL calls (protects the read-only token from
 // secondary rate limits). `|| 8` guards against a non-numeric env value, which
 // would otherwise be NaN and deadlock acquire().
@@ -89,10 +93,14 @@ export const graphql: GraphQL = async (query) => {
 			}
 			if (res.status === 401 || res.status === 403) {
 				const body = await res.text();
-				// Secondary / abuse limits are short-lived: retry with backoff.
+				// Secondary / abuse limit: open a short shared cooldown so every call
+				// backs off together (retrying into it just sustains the limit), and
+				// honor GitHub's Retry-After when present.
 				if (/abuse|secondary/i.test(body)) {
-					lastError = `HTTP ${res.status}: secondary rate limit`;
-					continue;
+					const retryAfter = Number(res.headers.get('retry-after'));
+					const cooldown = retryAfter > 0 ? retryAfter * 1000 : SECONDARY_COOLDOWN_MS;
+					rateLimitedUntil = Math.max(rateLimitedUntil, Date.now() + cooldown);
+					throw new RateLimitError(rateLimitedUntil);
 				}
 				// Primary limit: the hourly quota is spent. Open the breaker and fail
 				// fast (retrying within seconds is useless when it resets hourly).
