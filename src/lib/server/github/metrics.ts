@@ -1,7 +1,7 @@
 import { type GraphQL } from './client';
 import { median, std, round, isBugLabel } from './stats';
 import { type Month, monthKey, monthStart, monthEnd, monthStartMs, monthEndMs } from './months';
-import type { Repo, Member, RepoMonth, OpenPr, PrFlow, BotActivity } from './types';
+import type { Repo, Member, RepoMonth, OpenPr, PrFlow, BotActivity, BotMonthActivity } from './types';
 import type { MemberRepoMonthRow, ReviewRepoMonthRow } from '../store/assemble';
 
 // Heavy first:100 search aliases trip GitHub's per-query resource limit beyond
@@ -633,10 +633,11 @@ export async function fetchPrFlow(
 	gql: GraphQL,
 	repos: Repo[],
 	months: Month[]
-): Promise<{ prs: PrFlow[]; botActivity: BotActivity[] }> {
-	if (!months.length || !repos.length) return { prs: [], botActivity: [] };
+): Promise<{ prs: PrFlow[]; botActivity: BotActivity[]; botByMonth: BotMonthActivity[] }> {
+	if (!months.length || !repos.length) return { prs: [], botActivity: [], botByMonth: [] };
 	const out: PrFlow[] = [];
-	const botAcc = new Map<string, BotActivity>(); // bot login -> activity
+	const botAcc = new Map<string, BotActivity>(); // bot login -> window total
+	const botMonth = new Map<string, Map<string, { reviews: number; comments: number }>>(); // month -> login -> counts
 	await Promise.all(
 		months.map(async (m) => {
 			const month = monthKey(m);
@@ -663,12 +664,20 @@ export async function fetchPrFlow(
 					// is the inline review-comment volume; `prs` counts each PR once per
 					// bot so the page can show comments-per-PR.
 					const botsOnPr = new Set<string>();
+					let mm = botMonth.get(month);
+					if (!mm) botMonth.set(month, (mm = new Map()));
 					for (const r of submitted) {
 						if (r.author.__typename !== 'Bot') continue;
 						const b = botAcc.get(r.author.login) ?? { login: r.author.login, reviews: 0, comments: 0, prs: 0 };
-						if (r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED') b.reviews += 1;
-						b.comments += r.comments?.totalCount ?? 0;
+						const verdict = r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED';
+						const comments = r.comments?.totalCount ?? 0;
+						if (verdict) b.reviews += 1;
+						b.comments += comments;
 						botAcc.set(r.author.login, b);
+						const bm = mm.get(r.author.login) ?? { reviews: 0, comments: 0 };
+						if (verdict) bm.reviews += 1;
+						bm.comments += comments;
+						mm.set(r.author.login, bm);
 						botsOnPr.add(r.author.login);
 					}
 					for (const login of botsOnPr) botAcc.get(login)!.prs += 1;
@@ -700,5 +709,8 @@ export async function fetchPrFlow(
 	const botActivity = [...botAcc.values()].sort(
 		(a, b) => b.reviews + b.comments - (a.reviews + a.comments)
 	);
-	return { prs: out, botActivity };
+	const botByMonth: BotMonthActivity[] = [];
+	for (const [month, mm] of botMonth)
+		for (const [login, c] of mm) botByMonth.push({ month, login, reviews: c.reviews, comments: c.comments });
+	return { prs: out, botActivity, botByMonth };
 }

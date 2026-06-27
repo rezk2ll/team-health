@@ -34,6 +34,7 @@ const flowWith = (overall: Partial<FlowStats>, monthCounts: number[] = []): Flow
 	byMonth: monthCounts.map((count, i) => ({ month: `2026-0${i + 1}`, ...stats({ count }) })),
 	reviewerLoad: [],
 	botActivity: [],
+	botByMonth: [],
 	generatedAt: 0
 });
 

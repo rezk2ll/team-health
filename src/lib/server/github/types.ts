@@ -123,10 +123,14 @@ export type BotActivity = {
 	prs: number; // distinct PRs the bot reviewed (for comments-per-PR)
 };
 
+/** One bot's review/comment counts in one month, for trend charts. */
+export type BotMonthActivity = { month: string; login: string; reviews: number; comments: number };
+
 export type FlowResult = {
 	overall: FlowStats;
 	byMonth: ({ month: string } & FlowStats)[];
 	reviewerLoad: ReviewerLoad[]; // distinct PRs each person reviewed
 	botActivity: BotActivity[]; // automated reviewers, busiest first
+	botByMonth: BotMonthActivity[]; // bot activity per month, for trends
 	generatedAt: number;
 };
