@@ -49,12 +49,24 @@
 		return vals.filter((_, i) => i % step === 0);
 	});
 
-	// chart-style.svelte emits `--color-<key>` from each config entry's color.
+	// chart-style.svelte emits `--color-<key>` from each config entry's color, and
+	// the series reference it via var(--color-<key>). Series keys come from data
+	// (bot logins, repo/member names) and can contain characters illegal in CSS
+	// custom-property names (e.g. "dependabot[bot]", names with spaces), which
+	// silently drops the color. Remap to synthetic safe keys (`__s0`, `__s1`, ...)
+	// for the CSS layer while keeping the originals on each row for the x-axis.
 	const config = $derived(
-		Object.fromEntries(series.map((s) => [s.key, { label: s.label, color: s.color }])) as ChartConfig
+		Object.fromEntries(series.map((s, i) => [`__s${i}`, { label: s.label, color: s.color }])) as ChartConfig
 	);
 	const lcSeries = $derived(
-		series.map((s) => ({ key: s.key, label: s.label, color: `var(--color-${s.key})` }))
+		series.map((s, i) => ({ key: `__s${i}`, label: s.label, color: `var(--color-__s${i})` }))
+	);
+	const safeData = $derived(
+		data.map((row) => {
+			const o: Record<string, unknown> = { ...row };
+			series.forEach((s, i) => (o[`__s${i}`] = row[s.key]));
+			return o;
+		})
 	);
 
 	// The last point is the in-progress current month when the x-axis is months and
@@ -107,7 +119,7 @@
 		<Chart.Container {config} class={className}>
 		{#if kind === 'bar'}
 			<BarChart
-				{data}
+				data={safeData}
 				{x}
 				series={lcSeries}
 				seriesLayout={seriesLayout ?? 'group'}
@@ -122,7 +134,7 @@
 			</BarChart>
 		{:else if kind === 'area'}
 			<AreaChart
-				{data}
+				data={safeData}
 				{x}
 				series={lcSeries}
 				seriesLayout={seriesLayout === 'group' ? 'overlap' : (seriesLayout ?? 'overlap')}
@@ -138,7 +150,7 @@
 			</AreaChart>
 		{:else}
 			<LineChart
-				{data}
+				data={safeData}
 				{x}
 				series={lcSeries}
 				grid={{ y: true, x: false }}

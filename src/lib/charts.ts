@@ -102,28 +102,28 @@ type MemberRow = { author: string; month: string; value: number };
 
 function memberMonthly(rows: MemberRow[], config: AppConfig, monthsBack: number): MemberChart {
 	const members = activeMembers(config);
-	const loginToName = new Map(members.map((m) => [m.login, m.name]));
 	const memberLogins = new Set(members.map((m) => m.login));
 
-	const relevant = rows.filter((r) => memberLogins.has(r.author));
+	// Month axis from ALL rows (not just member rows) so a month where members
+	// were idle but the org was active still appears as a zero column.
 	const months = lastMonths(
-		relevant.map((r) => r.month),
+		rows.map((r) => r.month),
 		monthsBack
 	);
 	const monthSet = new Set(months);
 
+	// Accumulate by login so two members who share a display name don't merge.
 	const acc = new Map<string, Map<string, number>>();
-	for (const r of relevant) {
-		if (!monthSet.has(r.month)) continue;
-		const name = loginToName.get(r.author)!;
-		const perMonth = acc.get(name) ?? new Map<string, number>();
+	for (const r of rows) {
+		if (!memberLogins.has(r.author) || !monthSet.has(r.month)) continue;
+		const perMonth = acc.get(r.author) ?? new Map<string, number>();
 		perMonth.set(r.month, (perMonth.get(r.month) ?? 0) + r.value);
-		acc.set(name, perMonth);
+		acc.set(r.author, perMonth);
 	}
 
 	const data: MemberDatum[] = members.map((m) => {
 		const datum = { member: m.name } as MemberDatum;
-		const perMonth = acc.get(m.name);
+		const perMonth = acc.get(m.login);
 		for (const month of months) datum[month] = perMonth?.get(month) ?? 0;
 		return datum;
 	});
@@ -196,12 +196,16 @@ export function commitsByRepoChart(data: MetricsResult, config: AppConfig): Comm
 		byRepo.set(c.repo, perMember);
 	}
 
-	// Show the short repo name, busiest first.
+	// Show the short repo name, busiest first; fall back to the full owner/repo
+	// when two owners share a repo name so the x-axis bands don't collide.
 	const repoKeys = [...byRepo.keys()].sort(
 		(a, b) => sum(byRepo.get(b)!) - sum(byRepo.get(a)!)
 	);
+	const shortName = (full: string) => full.split('/').pop() ?? full;
+	const shortCounts = new Map<string, number>();
+	for (const r of repoKeys) shortCounts.set(shortName(r), (shortCounts.get(shortName(r)) ?? 0) + 1);
 	const datums: CommitsByRepoDatum[] = repoKeys.map((repo) => {
-		const datum = { repo: repo.split('/').pop() ?? repo } as CommitsByRepoDatum;
+		const datum = { repo: shortCounts.get(shortName(repo))! > 1 ? repo : shortName(repo) } as CommitsByRepoDatum;
 		const perMember = byRepo.get(repo)!;
 		for (const m of members) datum[m.login] = perMember.get(m.login) ?? 0;
 		return datum;
