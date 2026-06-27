@@ -63,6 +63,8 @@
 		{ key: 'after_approval', label: 'After approval', blurb: 'Median wait from approval to merge, month by month.' },
 		{ key: 'review_coverage', label: 'Review coverage', blurb: 'Share of merged PRs that got at least one review, month by month.' },
 		{ key: 'review_load', label: 'Review load', blurb: 'Distinct PRs each person reviewed over the window.' },
+		{ key: 'bot_comments', label: 'Bot comments', blurb: 'Review comments left by each automated reviewer, month by month.' },
+		{ key: 'bot_reviews', label: 'Bot reviews', blurb: 'Approvals and change requests by each automated reviewer, month by month.' },
 		{ key: 'Commits', label: 'Commits', blurb: 'Commits landed by each team member over recent months.' },
 		{ key: 'CommitsByRepo', label: 'Commits by repo', blurb: 'Where each member committed, broken down by repository.' },
 		{ key: 'MergedPRs', label: 'Merged PRs', blurb: 'Pull requests merged by each team member over recent months.' },
@@ -109,11 +111,33 @@
 		after_approval: { field: 'postApproveHours', label: 'Hours', color: 'var(--color-chart-5)' },
 		review_coverage: { field: 'reviewedPct', label: '% reviewed', color: 'var(--color-chart-4)' }
 	};
+	const NEEDS_FLOW = (c: string) => FLOW[c] || c === 'review_load' || c === 'bot_comments' || c === 'bot_reviews';
 	$effect(() => {
-		if ((FLOW[activeCategory] || activeCategory === 'review_load') && team?.repos.length)
+		if (NEEDS_FLOW(activeCategory) && team?.repos.length)
 			flow.ensure(team.repos, scope.months, scope.to || undefined);
 	});
 	const flowMonths = $derived(flow.data?.byMonth ?? []);
+
+	// Pivot per-bot monthly rows into one row per month with a column per bot.
+	function botPivot(field: 'comments' | 'reviews') {
+		const rows = flow.data?.botByMonth ?? [];
+		const logins = [...new Set(rows.map((r) => r.login))];
+		const byMonth = new Map<string, Record<string, number | string>>();
+		for (const r of rows) {
+			const o = byMonth.get(r.month) ?? { month: r.month };
+			o[r.login] = ((o[r.login] as number) ?? 0) + r[field];
+			byMonth.set(r.month, o);
+		}
+		const data = [...byMonth.values()]
+			.sort((a, b) => (a.month as string).localeCompare(b.month as string))
+			.map((o) => {
+				for (const l of logins) if (!(l in o)) o[l] = 0;
+				return o;
+			});
+		return { data, series: keySeries(logins) };
+	}
+	const botComments = $derived(activeCategory === 'bot_comments' ? botPivot('comments') : { data: [], series: [] });
+	const botReviews = $derived(activeCategory === 'bot_reviews' ? botPivot('reviews') : { data: [], series: [] });
 	const reviewLoad = $derived(
 		activeCategory === 'review_load'
 			? (flow.data?.reviewerLoad ?? []).slice(0, 15).map((r) => ({ name: nameOf(r.reviewer), prs: r.prs }))
@@ -300,6 +324,17 @@
 								<MetricChart data={reviewLoad} x="name" series={[{ key: 'prs', label: 'PRs reviewed', color: 'var(--color-chart-3)' }]} kind="bar" class="aspect-[2/1] w-full" />
 							{:else}
 								<div class="py-10 text-center text-sm text-[var(--color-ink-600)]">No review data.</div>
+							{/if}
+						</Card.Root>
+					{:else if activeCategory === 'bot_comments' || activeCategory === 'bot_reviews'}
+						{@const bots = activeCategory === 'bot_comments' ? botComments : botReviews}
+						<Card.Root class="p-7 shadow-sm">
+							{#if !flow.data && flow.loading}
+								<div class="py-10 text-center text-sm text-[var(--color-ink-600)]">Loading…</div>
+							{:else if bots.data.length && bots.series.length}
+								<MetricChart data={bots.data} x="month" series={bots.series} kind="bar" seriesLayout="stack" class="aspect-[2/1] w-full" />
+							{:else}
+								<div class="py-10 text-center text-sm text-[var(--color-ink-600)]">No bot activity.</div>
 							{/if}
 						</Card.Root>
 					{/if}
