@@ -4,9 +4,9 @@
 	import { Button } from '$lib/components/ui/button';
 	import { scope } from '$lib/client/scope.svelte';
 	import { discovery } from '$lib/client/discovery.svelte';
-	import { repoKey, parseRepoKey } from '$lib/client/selection';
+	import { repoKey, parseRepoKey, type Team } from '$lib/client/selection';
 	import type { Member, Repo } from '$lib/server/github/types';
-	import { Plus, Pencil, Trash2, Check, Users, GitBranch, Loader2, Search } from '@lucide/svelte';
+	import { Plus, Pencil, Trash2, Check, Users, GitBranch, Loader2, Search, Eye, Copy } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 
 	let { data } = $props();
@@ -24,11 +24,31 @@
 
 	type Draft = { id: string | null; name: string; members: Set<string>; repos: Set<string> };
 	let draft = $state<Draft | null>(null);
+	// A preconfigured team shown read-only in the detail panel.
+	let viewing = $state<Team | null>(null);
 	let memberQuery = $state('');
 	let repoQuery = $state('');
 
 	function startNew() {
 		draft = { id: null, name: '', members: new Set(), repos: new Set() };
+		viewing = null;
+		memberQuery = '';
+		repoQuery = '';
+	}
+	/** Open a team's members and repositories read-only (used for default teams). */
+	function view(t: Team) {
+		viewing = t;
+		draft = null;
+	}
+	/** Start a new, editable team pre-filled from an existing one (clone). */
+	function startFrom(t: Team) {
+		draft = {
+			id: null,
+			name: `${t.name} copy`,
+			members: new Set(t.members.map((m) => m.login)),
+			repos: new Set(t.repos.map(repoKey))
+		};
+		viewing = null;
 		memberQuery = '';
 		repoQuery = '';
 	}
@@ -41,6 +61,7 @@
 			members: new Set(t.members.map((m) => m.login)),
 			repos: new Set(t.repos.map(repoKey))
 		};
+		viewing = null;
 		memberQuery = '';
 		repoQuery = '';
 	}
@@ -125,6 +146,14 @@
 								{:else}
 									<Button size="xs" variant="outline" onclick={() => scope.setTeam(t.id)}>Use</Button>
 								{/if}
+								{#if t.builtin}
+									<Button size="icon-xs" variant="ghost" onclick={() => view(t)} aria-label="View team">
+										<Eye class="h-3.5 w-3.5" />
+									</Button>
+								{/if}
+								<Button size="icon-xs" variant="ghost" onclick={() => startFrom(t)} aria-label="Create a team from this">
+									<Copy class="h-3.5 w-3.5" />
+								</Button>
 								{#if !t.builtin}
 									<Button size="icon-xs" variant="ghost" onclick={() => startEdit(t.id)} aria-label="Edit"><Pencil class="h-3.5 w-3.5" /></Button>
 									<Button size="icon-xs" variant="ghost" onclick={() => scope.deleteTeam(t.id)} aria-label="Delete"><Trash2 class="h-3.5 w-3.5 text-[var(--color-negative)]" /></Button>
@@ -138,13 +167,68 @@
 
 		<!-- Editor -->
 		<div class="col-span-12 lg:col-span-8">
-			{#if !draft}
+			{#if !draft && !viewing}
 				<Card.Root class="flex h-full min-h-72 flex-col items-center justify-center gap-3 p-10 text-center shadow-sm">
 					<Users class="h-9 w-9 text-[var(--color-ink-400)]" />
-					<p class="text-sm text-[var(--color-ink-600)]">Select a team to edit, or create a new one.</p>
+					<p class="text-sm text-[var(--color-ink-600)]">Select a team to edit, view a default, or create a new one.</p>
 					<Button onclick={startNew}><Plus class="h-4 w-4" /> New team</Button>
 				</Card.Root>
-			{:else}
+			{:else if viewing}
+				<Card.Root class="gap-0 p-7 shadow-sm">
+					<div class="mb-6">
+						<div class="flex items-center gap-2">
+							<span class="font-display text-xl text-[var(--color-ink-950)]">{viewing.name}</span>
+							<span class="rounded bg-[var(--color-ink-100)] px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-[var(--color-ink-600)]">default</span>
+						</div>
+						<p class="mt-1.5 text-sm text-[var(--color-ink-600)]">
+							Preconfigured team, read-only. Create a copy to customize its members and repositories.
+						</p>
+					</div>
+
+					<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+						<div>
+							<div class="mb-2 flex items-center justify-between">
+								<span class="eyebrow">Members</span>
+								<span class="font-mono text-[11px] text-[var(--color-ink-600)]">{viewing.members.length}</span>
+							</div>
+							<div class="h-64 overflow-y-auto rounded-lg border border-[var(--color-ink-200)]">
+								{#each viewing.members as m (m.login)}
+									<div class="flex items-center gap-2.5 px-3 py-1.5 text-sm">
+										<span class="text-[var(--color-ink-900)]">{m.name}</span>
+										<span class="font-mono text-[11px] text-[var(--color-ink-500)]">{m.login}</span>
+									</div>
+								{:else}
+									<div class="px-3 py-2 text-sm text-[var(--color-ink-500)]">No members.</div>
+								{/each}
+							</div>
+						</div>
+
+						<div>
+							<div class="mb-2 flex items-center justify-between">
+								<span class="eyebrow">Repositories</span>
+								<span class="font-mono text-[11px] text-[var(--color-ink-600)]">{viewing.repos.length}</span>
+							</div>
+							<div class="h-64 overflow-y-auto rounded-lg border border-[var(--color-ink-200)]">
+								{#each viewing.repos as r (repoKey(r))}
+									<div class="flex items-center gap-2.5 px-3 py-1.5 text-sm">
+										<span class="font-mono text-[12px] text-[var(--color-ink-800)]">{r.owner}/<span class="text-[var(--color-ink-950)]">{r.repo}</span></span>
+									</div>
+								{:else}
+									<div class="px-3 py-2 text-sm text-[var(--color-ink-500)]">No repositories.</div>
+								{/each}
+							</div>
+						</div>
+					</div>
+
+					<div class="mt-7 flex items-center gap-3 border-t border-[var(--color-ink-200)] pt-5">
+						<Button onclick={() => viewing && startFrom(viewing)}><Copy class="h-4 w-4" /> Create a team from this</Button>
+						{#if viewing.id !== scope.activeTeamId}
+							<Button variant="outline" onclick={() => viewing && scope.setTeam(viewing.id)}>Use this team</Button>
+						{/if}
+						<Button variant="ghost" onclick={() => (viewing = null)}>Close</Button>
+					</div>
+				</Card.Root>
+			{:else if draft}
 				<Card.Root class="gap-0 p-7 shadow-sm">
 					<div class="mb-6">
 						<label for="team-name" class="eyebrow mb-2 block">Team name</label>
