@@ -66,6 +66,9 @@ export const graphql: GraphQL = async (query) => {
 
 	await acquire();
 	try {
+		// Re-check after acquiring: the breaker may have opened while we waited for a
+		// slot, so queued calls don't all fire into an open limit and prolong it.
+		if (rateLimitedUntil > Date.now()) throw new RateLimitError(rateLimitedUntil);
 		let lastError = 'unknown error';
 		for (const delay of RETRY_DELAYS_MS) {
 			if (delay) await sleep(delay);

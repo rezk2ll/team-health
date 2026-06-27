@@ -13,7 +13,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	try {
 		const body = await request.json().catch(() => ({}));
 		repos = parseRepoSelection(body);
-		months = Math.max(1, Math.min(24, Math.round(Number((body as { months?: number }).months ?? 12))));
+		const n = Math.round(Number((body as { months?: number }).months ?? 12));
+		months = Number.isFinite(n) ? Math.max(1, Math.min(24, n)) : 12;
 		const rawTo = (body as { to?: unknown }).to;
 		to = isMonthKey(rawTo) ? rawTo : undefined;
 	} catch (e) {

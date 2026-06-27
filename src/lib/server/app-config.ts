@@ -76,11 +76,15 @@ export async function getAppSettings(): Promise<AppSettings> {
 /** Persist admin overrides (validated). Returns the new effective settings. */
 export async function setAppSettings(patch: Record<string, unknown>): Promise<AppSettings> {
 	if (!hasDb()) throw new Error('persistence is not configured');
-	const clean = sanitize(patch);
+	// Merge onto the existing stored overrides so a partial PUT doesn't drop
+	// previously-saved settings.
+	const [row] = await db().select().from(appConfig).where(eq(appConfig.id, CONFIG_ID));
+	const existing = (row?.value as Record<string, unknown>) ?? {};
+	const merged = sanitize({ ...existing, ...patch });
 	await db()
 		.insert(appConfig)
-		.values({ id: CONFIG_ID, value: clean })
-		.onConflictDoUpdate({ target: appConfig.id, set: { value: clean, updatedAt: new Date() } });
+		.values({ id: CONFIG_ID, value: merged })
+		.onConflictDoUpdate({ target: appConfig.id, set: { value: merged, updatedAt: new Date() } });
 	cache = null;
 	return getAppSettings();
 }
