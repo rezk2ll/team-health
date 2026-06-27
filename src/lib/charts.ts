@@ -18,10 +18,8 @@ export type RepoPoint = {
 	issuesOpen: number;
 	bugsOpen: number;
 	prsOpen: number;
-	prsStale: number;
 	releases: number;
 	resolutionDays: number;
-	resolutionStd: number;
 	resolutionRate: number;
 };
 
@@ -57,10 +55,8 @@ export function repoSeries(repos: RepoMonth[]): RepoSeries[] {
 			issuesOpen: r.issuesOpen,
 			bugsOpen: r.bugsOpen,
 			prsOpen: r.prsOpen,
-			prsStale: r.prsStale,
 			releases: r.releases,
 			resolutionDays: r.resolutionDays,
-			resolutionStd: r.resolutionStd,
 			resolutionRate: r.resolutionRate
 		});
 	}

@@ -47,10 +47,8 @@ function repoMonth(over: Partial<RepoMonth>): RepoMonth {
 		issuesOpen: 0,
 		bugsOpen: 0,
 		prsOpen: 0,
-		prsStale: 0,
 		releases: 0,
 		resolutionDays: 0,
-		resolutionStd: 0,
 		resolutionRate: 0,
 		...over
 	};

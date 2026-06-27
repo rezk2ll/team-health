@@ -1,5 +1,5 @@
 import { type GraphQL } from './client';
-import { median, std, round, isBugLabel, makeBugMatcher } from './stats';
+import { median, round, isBugLabel, makeBugMatcher } from './stats';
 import { type Month, monthKey, monthStart, monthEnd, monthStartMs, monthEndMs } from './months';
 import type { Repo, Member, RepoMonth, OpenPr, PrFlow, BotActivity, BotMonthActivity } from './types';
 import type { MemberRepoMonthRow, ReviewRepoMonthRow } from '../store/assemble';
@@ -91,7 +91,7 @@ export function issueStatsForMonth(
 	opened: { issueCount: number; nodes: IssueNode[] },
 	closedCount: number,
 	isBug: (labels: string[]) => boolean = isBugLabel
-): { opened: number; closed: number; bugs: number; resolutionDays: number; resolutionStd: number; resolutionRate: number } {
+): { opened: number; closed: number; bugs: number; resolutionDays: number; resolutionRate: number } {
 	let bugs = 0;
 	const resolutionDaysList: number[] = [];
 	for (const issue of opened.nodes) {
@@ -110,7 +110,6 @@ export function issueStatsForMonth(
 		closed: closedCount,
 		bugs,
 		resolutionDays: resolutionDaysList.length ? round(median(resolutionDaysList), 2) : 0,
-		resolutionStd: std(resolutionDaysList),
 		resolutionRate: bugs > 0 ? round((resolutionDaysList.length / bugs) * 100, 1) : 0
 	};
 }
@@ -236,7 +235,6 @@ function stockAliasBlock(owner: string, repo: string, m: Month, i: number, bugLa
 	const today = new Date().toISOString().slice(0, 10);
 	const end = monthEnd(m);
 	const d = end > today ? today : end;
-	const w = new Date(Date.parse(d) - 7 * DAY_MS).toISOString().slice(0, 10);
 	const r = (q: string, alias: string) =>
 		`${alias}_${i}: search(query: "repo:${owner}/${repo} ${q}", type: ISSUE, first: 1) { issueCount }`;
 	return [
@@ -245,9 +243,7 @@ function stockAliasBlock(owner: string, repo: string, m: Month, i: number, bugLa
 		r(`type:issue ${bugLabels} created:<=${d}`, 'b_open'),
 		r(`type:issue ${bugLabels} closed:<=${d}`, 'b_closed'),
 		r(`type:pr created:<=${d}`, 'p_open'),
-		r(`type:pr closed:<=${d}`, 'p_closed'),
-		r(`type:pr created:<=${w}`, 's_open'),
-		r(`type:pr created:<=${w} closed:<=${d}`, 's_closed')
+		r(`type:pr closed:<=${d}`, 'p_closed')
 	].join('\n');
 }
 
@@ -293,7 +289,6 @@ async function fetchRepoSeries(
 		const issuesOpen = Math.max(0, count(`i_open_${i}`) - count(`i_closed_${i}`));
 		const bugsOpen = Math.max(0, count(`b_open_${i}`) - count(`b_closed_${i}`));
 		const prsOpen = Math.max(0, count(`p_open_${i}`) - count(`p_closed_${i}`));
-		const prsStale = Math.max(0, count(`s_open_${i}`) - count(`s_closed_${i}`));
 		return {
 			owner,
 			repo,
@@ -304,10 +299,8 @@ async function fetchRepoSeries(
 			issuesOpen,
 			bugsOpen,
 			prsOpen,
-			prsStale,
 			releases: releaseCounts[i],
 			resolutionDays: iss.resolutionDays,
-			resolutionStd: iss.resolutionStd,
 			resolutionRate: iss.resolutionRate
 		};
 		})
