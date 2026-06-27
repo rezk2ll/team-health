@@ -121,14 +121,6 @@ type ReviewPrNode = {
 
 type CommitNode = { oid: string; committedDate: string; author: { email: string | null; user: { login: string } | null } };
 
-function commitMatches(author: CommitNode['author'] | null, member: Member): boolean {
-	if (!author) return false; // commits can have a null git author actor
-	// GitHub logins are case-insensitive, so match that way (e.g. octo-cat vs Octo-Cat).
-	if (author.user && author.user.login.toLowerCase() === member.login.toLowerCase()) return true;
-	if (member.email && author.email && author.email.toLowerCase() === member.email.toLowerCase()) return true;
-	return false;
-}
-
 /** Attribute a commit to exactly one member: a linked GitHub login wins, then a
  * (non-shared) author email, else nobody. One member per commit avoids the
  * double-count where login and email point at different people. */
@@ -138,30 +130,11 @@ export function pickCommitMember(
 	byEmail: Map<string, string>
 ): string | null {
 	if (!author) return null;
-	const viaLogin = author.user && byLogin.get(author.user.login.toLowerCase());
-	if (viaLogin) return viaLogin;
+	// A linked GitHub identity is authoritative: if the commit has a user, attribute
+	// to that member or to nobody. Email is only a fallback for commits with no
+	// linked user (otherwise a member's email could steal a non-member's commit).
+	if (author.user) return byLogin.get(author.user.login.toLowerCase()) ?? null;
 	return (author.email && byEmail.get(author.email.toLowerCase())) || null;
-}
-
-/** Unique commit SHAs by a member in one repo, from PR commits + default-branch
- * history, within [start,end]. Mirrors get_commits_by_author (deduped per repo). */
-export function commitShasForMember(
-	prCommits: CommitNode[],
-	mainCommits: CommitNode[],
-	member: Member,
-	startMs: number,
-	endMs: number
-): Set<string> {
-	const shas = new Set<string>();
-	for (const c of prCommits) {
-		if (!commitMatches(c.author, member)) continue;
-		const t = Date.parse(c.committedDate);
-		if (t >= startMs && t <= endMs) shas.add(c.oid);
-	}
-	for (const c of mainCommits) {
-		if (commitMatches(c.author, member)) shas.add(c.oid);
-	}
-	return shas;
 }
 
 // ---------------------------------------------------------------------------
