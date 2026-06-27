@@ -11,7 +11,8 @@
 		mergedPrChart,
 		reviewActivityChart,
 		ticketsChart,
-		commitsByRepoChart
+		commitsByRepoChart,
+		orgTrend
 	} from '$lib/charts';
 	import type { AppConfig } from '$lib/server/config';
 	import { Button } from '$lib/components/ui/button';
@@ -54,11 +55,14 @@
 		{ key: 'stock', label: 'Stock', blurb: 'Open backlog at each month end: issues, bugs, and pull requests.' },
 		{ key: 'bug_resolution', label: 'Bug resolution', blurb: 'How quickly bugs were resolved, and the share that got closed.' },
 		{ key: 'releases', label: 'Releases', blurb: 'Published releases shipped each month.' },
+		{ key: 'churn', label: 'Code churn', blurb: 'Total lines added and removed across merged PRs, month by month.' },
+		{ key: 'merge_rate', label: 'Merge rate', blurb: 'Share of closed PRs that were merged rather than abandoned, month by month.' },
 		{ key: 'cycle_time', label: 'Cycle time', blurb: 'Median time from opening a PR to merging it, month by month.' },
 		{ key: 'first_review', label: 'Time to first review', blurb: 'Median wait for a PR to get its first review, month by month.' },
 		{ key: 'review_time', label: 'Review time', blurb: 'Median time in review (first review to merge), month by month.' },
 		{ key: 'after_approval', label: 'After approval', blurb: 'Median wait from approval to merge, month by month.' },
 		{ key: 'review_coverage', label: 'Review coverage', blurb: 'Share of merged PRs that got at least one review, month by month.' },
+		{ key: 'review_load', label: 'Review load', blurb: 'Distinct PRs each person reviewed over the window.' },
 		{ key: 'Commits', label: 'Commits', blurb: 'Commits landed by each team member over recent months.' },
 		{ key: 'CommitsByRepo', label: 'Commits by repo', blurb: 'Where each member committed, broken down by repository.' },
 		{ key: 'MergedPRs', label: 'Merged PRs', blurb: 'Pull requests merged by each team member over recent months.' },
@@ -106,10 +110,32 @@
 		review_coverage: { field: 'reviewedPct', label: '% reviewed', color: 'var(--color-chart-4)' }
 	};
 	$effect(() => {
-		if (FLOW[activeCategory] && team?.repos.length)
+		if ((FLOW[activeCategory] || activeCategory === 'review_load') && team?.repos.length)
 			flow.ensure(team.repos, scope.months, scope.to || undefined);
 	});
 	const flowMonths = $derived(flow.data?.byMonth ?? []);
+	const reviewLoad = $derived(
+		activeCategory === 'review_load'
+			? (flow.data?.reviewerLoad ?? []).slice(0, 15).map((r) => ({ name: nameOf(r.reviewer), prs: r.prs }))
+			: []
+	);
+
+	// Team-wide totals over time, aggregated from the per-repo metrics.
+	const ORG: Record<string, { kind: 'line' | 'bar'; seriesLayout?: 'stack' | 'group'; series: SeriesCfg[] }> = {
+		churn: {
+			kind: 'bar',
+			seriesLayout: 'stack',
+			series: [
+				{ key: 'additions', label: 'Additions', color: 'var(--color-chart-2)' },
+				{ key: 'deletions', label: 'Deletions', color: 'var(--color-chart-4)' }
+			]
+		},
+		merge_rate: {
+			kind: 'line',
+			series: [{ key: 'mergeRate', label: '% merged', color: 'var(--color-chart-1)' }]
+		}
+	};
+	const orgMonths = $derived(stats && ORG[activeCategory] ? orgTrend(stats.repos) : []);
 
 	// Map a set of keys to colored series; `label` formats the displayed name.
 	function keySeries(keys: string[], label: (k: string) => string = (k) => k): SeriesCfg[] {
@@ -249,6 +275,31 @@
 								/>
 							{:else}
 								<div class="py-10 text-center text-sm text-[var(--color-ink-600)]">No flow data.</div>
+							{/if}
+						</Card.Root>
+					{:else if ORG[activeCategory]}
+						<Card.Root class="p-7 shadow-sm">
+							{#if orgMonths.length}
+								<MetricChart
+									data={orgMonths}
+									x="month"
+									series={ORG[activeCategory].series}
+									kind={ORG[activeCategory].kind}
+									seriesLayout={ORG[activeCategory].seriesLayout}
+									class="aspect-[2/1] w-full"
+								/>
+							{:else}
+								<div class="py-10 text-center text-sm text-[var(--color-ink-600)]">No data.</div>
+							{/if}
+						</Card.Root>
+					{:else if activeCategory === 'review_load'}
+						<Card.Root class="p-7 shadow-sm">
+							{#if !flow.data && flow.loading}
+								<div class="py-10 text-center text-sm text-[var(--color-ink-600)]">Loading…</div>
+							{:else if reviewLoad.length}
+								<MetricChart data={reviewLoad} x="name" series={[{ key: 'prs', label: 'PRs reviewed', color: 'var(--color-chart-3)' }]} kind="bar" class="aspect-[2/1] w-full" />
+							{:else}
+								<div class="py-10 text-center text-sm text-[var(--color-ink-600)]">No review data.</div>
 							{/if}
 						</Card.Root>
 					{/if}
