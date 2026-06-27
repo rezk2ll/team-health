@@ -74,7 +74,7 @@
 								<div class="font-mono tabular text-xl text-[var(--color-ink-950)]">
 									{b.prs ? (b.comments / b.prs).toFixed(1) : '0'}
 								</div>
-								<div class="eyebrow mt-0.5">Per PR</div>
+								<div class="eyebrow mt-0.5">Comments/PR</div>
 							</div>
 						</div>
 						<div class="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-[var(--color-ink-200)]">

@@ -227,7 +227,7 @@
 		<section class="grid grid-cols-1 gap-8 lg:grid-cols-2">
 			<div>
 				<div class="mb-6">
-					<div class="eyebrow mb-2">Commit leaderboard</div>
+					<div class="eyebrow mb-2">Commit leaderboard · last {scope.memberMonths}m</div>
 					<h2 class="font-display text-[1.75rem] leading-none tracking-tight">Who's pushing the code</h2>
 				</div>
 				<Card.Root class="p-6 shadow-sm">
@@ -257,7 +257,7 @@
 
 			<div>
 				<div class="mb-6">
-					<div class="eyebrow mb-2">Lines of code · merged PRs</div>
+					<div class="eyebrow mb-2">Lines of code · merged PRs · last {scope.memberMonths}m</div>
 					<h2 class="font-display text-[1.75rem] leading-none tracking-tight">Who's changing the most</h2>
 				</div>
 				<Card.Root class="p-6 shadow-sm">
@@ -297,7 +297,7 @@
 					<div class="eyebrow mb-2">Standouts</div>
 					<h2 class="font-display text-[1.75rem] leading-none tracking-tight">The MVPs.</h2>
 					<p class="mt-2 max-w-xl text-sm text-[var(--color-ink-600)]">
-						Who led the pack this period, one trophy per stat.
+						Who led the pack over the last {scope.memberMonths} months, one trophy per stat.
 					</p>
 				</div>
 				<div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
