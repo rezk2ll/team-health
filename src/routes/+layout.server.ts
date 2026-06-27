@@ -12,6 +12,7 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 		allowedOrgs: allowedOrgs(),
 		defaults: { months: settings.defaultMonths, memberMonths: settings.defaultMemberMonths },
 		global: { repos: settings.globalRepos, months: settings.globalMonths },
+		signals: settings.signals,
 		user: { name: locals.user.name, email: locals.user.email },
 		authEnabled: !AUTH_DISABLED,
 		teamsPersisted: hasDb(),

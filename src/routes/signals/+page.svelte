@@ -8,8 +8,11 @@
 	import { computeSignals, DEFAULT_TARGETS, type SignalLevel } from '$lib/signals';
 	import { AlertCircle, AlertTriangle, CheckCircle2, Loader2 } from '@lucide/svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
+	import { page } from '$app/state';
 
 	const team = $derived(scope.activeTeam);
+	// Admin-configurable health targets (falls back to defaults).
+	const targets = $derived(page.data.signals ?? DEFAULT_TARGETS);
 
 	// Signals draw on flow + attention (and the scope-driven metrics); ensure the
 	// two route-specific sources are loaded for the active team.
@@ -26,7 +29,7 @@
 	const error = $derived(flow.error || attention.error);
 
 	const signals = $derived(
-		ready ? computeSignals(metrics.data, flow.data, attention.data, DEFAULT_TARGETS) : []
+		ready ? computeSignals(metrics.data, flow.data, attention.data, targets) : []
 	);
 	const problems = $derived(signals.filter((s) => s.level !== 'ok'));
 	const passing = $derived(signals.filter((s) => s.level === 'ok'));
