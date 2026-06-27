@@ -124,13 +124,12 @@ export function computeSignals(
 			detail: 'Share of merged PRs that got at least one review.'
 		});
 
-		// Bottleneck: which PR-lifecycle stage eats the most time, so a slow cycle
-		// can be localized instead of just observed.
+		// Bottleneck: which half of the cycle eats the most time. pickup + review
+		// (first review -> merge) add up to the cycle, so compare those two.
 		// reviewHours is newer than some cached FlowResults; tolerate its absence.
 		const stages = [
-			{ name: 'waiting for first review', h: o.firstReviewHours },
-			{ name: 'in review (first review to approval)', h: o.reviewHours ?? 0 },
-			{ name: 'waiting to merge after approval', h: o.postApproveHours }
+			{ name: 'waiting for the first review', h: o.firstReviewHours },
+			{ name: 'in review (first review to merge)', h: o.reviewHours ?? 0 }
 		];
 		const top = stages.reduce((a, b) => (b.h > a.h ? b : a));
 		const sum = stages.reduce((s, x) => s + x.h, 0);

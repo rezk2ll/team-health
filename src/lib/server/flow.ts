@@ -14,10 +14,9 @@ function statsFor(prs: PrFlow[]): FlowStats {
 		return { count: 0, reviewedPct: 0, firstReviewHours: 0, reviewHours: 0, mergeHours: 0, postApproveHours: 0 };
 	const reviewed = prs.filter((p) => p.firstReviewAt);
 	const firstReview = reviewed.map((p) => hoursBetween(p.createdAt, p.firstReviewAt!)).filter((h) => h >= 0);
-	const review = prs
-		.filter((p) => p.firstReviewAt && p.approvedAt)
-		.map((p) => hoursBetween(p.firstReviewAt!, p.approvedAt!))
-		.filter((h) => h >= 0);
+	// Review time runs first review -> merge (the industry definition), so the whole
+	// review-and-rework loop is counted, not just up to an early approval.
+	const review = reviewed.map((p) => hoursBetween(p.firstReviewAt!, p.mergedAt)).filter((h) => h >= 0);
 	const merge = prs.map((p) => hoursBetween(p.createdAt, p.mergedAt)).filter((h) => h >= 0);
 	const postApprove = prs.filter((p) => p.approvedAt).map((p) => hoursBetween(p.approvedAt!, p.mergedAt)).filter((h) => h >= 0);
 	return {

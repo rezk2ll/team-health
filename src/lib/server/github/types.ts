@@ -108,9 +108,9 @@ export type FlowStats = {
 	count: number;
 	reviewedPct: number; // share of merged PRs that got at least one review
 	firstReviewHours: number; // median open -> first review (pickup)
-	reviewHours: number; // median first review -> approved (review)
+	reviewHours: number; // median first review -> merged (review, incl. rework)
 	mergeHours: number; // median open -> merged (total cycle time)
-	postApproveHours: number; // median approved -> merged (merge wait)
+	postApproveHours: number; // median last approval -> merged (post-approval wait)
 };
 
 export type ReviewerLoad = { reviewer: string; prs: number };

@@ -528,7 +528,7 @@ export async function fetchPrFlow(gql: GraphQL, repos: Repo[], months: Month[]):
       f${i}: search(query: "repo:${owner}/${repo} type:pr is:merged merged:${s}..${e}", type: ISSUE, first: 100) {
         nodes { ... on PullRequest {
           createdAt mergedAt
-          reviews(first: 30) { nodes { submittedAt state author { login __typename } } }
+          reviews(first: 100) { nodes { submittedAt state author { login __typename } } }
         } }
       }`
 			);
@@ -542,7 +542,14 @@ export async function fetchPrFlow(gql: GraphQL, repos: Repo[], months: Month[]):
 						(r: any) => r?.submittedAt && r.author?.login && r.author?.__typename !== 'Bot'
 					);
 					const times = reviewNodes.map((r) => r.submittedAt).sort();
-					const approvals = reviewNodes.filter((r) => r.state === 'APPROVED').map((r) => r.submittedAt).sort();
+					// Gating approval = the LAST approval at/before merge, not the first:
+					// an early approve followed by more changes and a re-approve must keep
+					// the rework inside review time, not the post-approval wait.
+					const mergedMs = Date.parse(pr.mergedAt);
+					const approvals = reviewNodes
+						.filter((r) => r.state === 'APPROVED' && Date.parse(r.submittedAt) <= mergedMs)
+						.map((r) => r.submittedAt)
+						.sort();
 					const reviewers = [...new Set(reviewNodes.map((r) => r.author?.login).filter(Boolean))] as string[];
 					out.push({
 						repo: `${owner}/${repo}`,
@@ -550,7 +557,7 @@ export async function fetchPrFlow(gql: GraphQL, repos: Repo[], months: Month[]):
 						createdAt: pr.createdAt,
 						mergedAt: pr.mergedAt,
 						firstReviewAt: times[0] ?? null,
-						approvedAt: approvals[0] ?? null,
+						approvedAt: approvals[approvals.length - 1] ?? null,
 						reviewers
 					});
 				}
