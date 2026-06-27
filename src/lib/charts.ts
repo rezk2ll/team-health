@@ -2,6 +2,7 @@
 // No filesystem or server access here so it can be unit-tested and run in the browser.
 import type { AppConfig } from './server/config';
 import type { MetricsResult, RepoMonth } from './server/github/types';
+import { repoKey } from './client/selection';
 
 export type RepoPoint = {
 	month: string;
@@ -36,7 +37,7 @@ export type RepoSeries = {
 export function repoSeries(repos: RepoMonth[]): RepoSeries[] {
 	const byRepo = new Map<string, RepoSeries>();
 	for (const r of repos) {
-		const key = `${r.owner}/${r.repo}`;
+		const key = repoKey(r);
 		let series = byRepo.get(key);
 		if (!series) {
 			series = { key, owner: r.owner, repo: r.repo, label: r.repo, points: [] };

@@ -144,4 +144,14 @@ export function createCache<V>(name: string, ttlMs: number): Cache<V> {
 	return env.REDIS_URL ? new RedisCache<V>(name, ttl) : new MemoryCache<V>(ttl);
 }
 
-export const cacheBackend = env.REDIS_URL ? 'redis' : 'memory';
+/** Wrap a compute function in a named cache: concurrent identical calls
+ * (by `keyOf`) collapse to one execution and the result is cached for `ttlMs`. */
+export function defineCache<Args extends unknown[], V>(
+	name: string,
+	ttlMs: number,
+	keyOf: (...args: Args) => string,
+	compute: (...args: Args) => Promise<V>
+): (...args: Args) => Promise<V> {
+	const cache = createCache<V>(name, ttlMs);
+	return (...args: Args) => cache.getOrCompute(keyOf(...args), () => compute(...args));
+}

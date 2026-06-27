@@ -1,10 +1,9 @@
-import { createCache } from './cache';
+import { defineCache } from './cache';
 import { getReport } from './report';
 import type { MetricsResult, Selection } from './github/types';
 import { env } from '$env/dynamic/private';
 
 const TTL_MS = Number(env.METRICS_CACHE_TTL_MS ?? 20 * 60 * 1000);
-const cache = createCache<MetricsResult>('metrics', TTL_MS);
 
 function selectionKey(s: Selection): string {
 	return JSON.stringify({
@@ -17,6 +16,9 @@ function selectionKey(s: Selection): string {
 }
 
 /** Cached, concurrency-de-duplicated metrics for a selection. */
-export function getMetrics(selection: Selection): Promise<MetricsResult> {
-	return cache.getOrCompute(selectionKey(selection), () => getReport(selection));
-}
+export const getMetrics = defineCache<[Selection], MetricsResult>(
+	'metrics',
+	TTL_MS,
+	selectionKey,
+	(selection) => getReport(selection)
+);

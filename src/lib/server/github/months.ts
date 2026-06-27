@@ -27,6 +27,9 @@ export function monthEnd(m: Month): string {
 	return `${m.year}-${pad(m.month)}-${pad(lastDay)}`;
 }
 
+/** Epoch ms of the first instant of the month (UTC). */
+export const monthStartMs = (m: Month): number => Date.parse(monthStart(m) + 'T00:00:00Z');
+
 /** Epoch ms of the final instant of the month (UTC) — the point after which a
  * completed month's data can no longer change. */
 export const monthEndMs = (m: Month): number => Date.parse(monthEnd(m) + 'T23:59:59.999Z');
