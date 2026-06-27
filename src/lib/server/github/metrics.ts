@@ -186,6 +186,8 @@ async function runChunkedAliases(
 const PR_NODE_FIELDS = `... on PullRequest { additions deletions merged createdAt closedAt comments { totalCount } reviews { totalCount } }`;
 const ISSUE_NODE_FIELDS = `... on Issue { createdAt closedAt labels(first: 10) { nodes { name } } }`;
 const MERGED_PR_NODE_FIELDS = `... on PullRequest { author { login } additions deletions }`;
+const REVIEW_PR_NODE_FIELDS = `... on PullRequest { author { login } reviews(first: 50) { nodes { author { login } submittedAt state } } comments(first: 100) { nodes { author { login } createdAt } } }`;
+const FLOW_PR_NODE_FIELDS = `... on PullRequest { createdAt mergedAt reviews(first: 100) { nodes { submittedAt state author { login __typename } comments { totalCount } } } }`;
 const createdPrQuery = (owner: string, repo: string, m: Month) =>
 	`repo:${owner}/${repo} type:pr created:${monthStart(m)}..${monthEnd(m)} sort:created-asc`;
 const openedIssueQuery = (owner: string, repo: string, m: Month) =>
@@ -366,14 +368,15 @@ export function reviewCountsFromNodes(
 		counts.set(login, e);
 	};
 	for (const pr of prs) {
+		if (!pr) continue; // partial 200s can null individual search nodes
 		const prAuthor = pr.author?.login ?? null;
-		for (const review of pr.reviews.nodes) {
+		for (const review of pr.reviews?.nodes ?? []) {
 			const reviewer = review.author?.login ?? null;
 			if (!reviewer || reviewer === prAuthor || review.state === 'PENDING' || !review.submittedAt) continue;
 			const t = Date.parse(review.submittedAt);
 			if (t >= startMs && t <= endMs) bump(reviewer, 'reviews');
 		}
-		for (const comment of pr.comments.nodes) {
+		for (const comment of pr.comments?.nodes ?? []) {
 			const commenter = comment.author?.login ?? null;
 			if (!commenter || commenter === prAuthor) continue;
 			const t = Date.parse(comment.createdAt);
@@ -485,14 +488,15 @@ export async function fetchMemberRepoMonthRows(
 			await Promise.all(
 				repos.map(async ({ owner, repo }, i) => {
 					const prCommits: CommitNode[] = (commitData[`pr${i}`]?.nodes ?? []).flatMap(
-						(pr: any) => pr.commits.nodes.map((c: any) => c.commit)
+						(pr: any) => (pr?.commits?.nodes ?? []).map((c: any) => c.commit)
 					);
 					const history = commitData[`main${i}`]?.defaultBranchRef?.target?.history;
 					const mainCommits: CommitNode[] = [...(history?.nodes ?? [])];
 					// Drain repos with >100 default-branch commits this month (the batched
 					// query only returns the first page) so commit counts aren't truncated.
+					// Guarded so a stuck/repeating cursor can't loop unbounded.
 					let cursor: string | null = history?.pageInfo?.hasNextPage ? history.pageInfo.endCursor : null;
-					while (cursor) {
+					for (let guard = 0; cursor && guard < 50; guard++) {
 						const page = await fetchHistoryPage(gql, owner, repo, monthStart(m), monthEnd(m), cursor);
 						mainCommits.push(...page.nodes);
 						cursor = page.cursor;
@@ -564,21 +568,27 @@ export async function fetchReviewRepoMonthRows(gql: GraphQL, repos: Repo[], mont
 			const month = monthKey(m);
 			const startMs = monthStartMs(m);
 			const endMs = monthEndMs(m);
+			const reviewQuery = (owner: string, repo: string) =>
+				`repo:${owner}/${repo} type:pr updated:${monthStart(m)}..${monthEnd(m)}`;
 			const blocks = repos.map(
 				({ owner, repo }, i) => `
-      r${i}: search(query: "repo:${owner}/${repo} type:pr updated:${monthStart(m)}..${monthEnd(m)}", type: ISSUE, first: 100) {
-        nodes { ... on PullRequest {
-          author { login }
-          reviews(first: 50) { nodes { author { login } submittedAt state } }
-          comments(first: 100) { nodes { author { login } createdAt } }
-        } }
+      r${i}: search(query: "${reviewQuery(owner, repo)}", type: ISSUE, first: 100) {
+        nodes { ${REVIEW_PR_NODE_FIELDS} }
+        pageInfo { hasNextPage endCursor }
       }`
 			);
 			const data = await runChunkedAliases(gql, blocks);
-			repos.forEach(({ owner, repo }, i) => {
-				const counts = reviewCountsFromNodes(data[`r${i}`]?.nodes ?? [], startMs, endMs);
-				for (const [reviewer, v] of counts) out.push({ reviewer, owner, repo, month, reviews: v.reviews, comments: v.comments });
-			});
+			await Promise.all(
+				repos.map(async ({ owner, repo }, i) => {
+					const raw = data[`r${i}`];
+					// Drain >100 updated PRs/month so reviewer/comment counts aren't truncated.
+					const nodes = raw?.pageInfo?.hasNextPage
+						? await drainSearchNodes(gql, reviewQuery(owner, repo), REVIEW_PR_NODE_FIELDS, raw)
+						: (raw?.nodes ?? []);
+					const counts = reviewCountsFromNodes(nodes, startMs, endMs);
+					for (const [reviewer, v] of counts) out.push({ reviewer, owner, repo, month, reviews: v.reviews, comments: v.comments });
+				})
+			);
 		})
 	);
 	return out;
@@ -643,18 +653,24 @@ export async function fetchPrFlow(
 			const month = monthKey(m);
 			const s = monthStart(m);
 			const e = monthEnd(m);
+			const mergedFlowQuery = (owner: string, repo: string) =>
+				`repo:${owner}/${repo} type:pr is:merged merged:${s}..${e}`;
 			const blocks = repos.map(
 				({ owner, repo }, i) => `
-      f${i}: search(query: "repo:${owner}/${repo} type:pr is:merged merged:${s}..${e}", type: ISSUE, first: 100) {
-        nodes { ... on PullRequest {
-          createdAt mergedAt
-          reviews(first: 100) { nodes { submittedAt state author { login __typename } comments { totalCount } } }
-        } }
+      f${i}: search(query: "${mergedFlowQuery(owner, repo)}", type: ISSUE, first: 100) {
+        nodes { ${FLOW_PR_NODE_FIELDS} }
+        pageInfo { hasNextPage endCursor }
       }`
 			);
 			const data = await runChunkedAliases(gql, blocks, 2);
-			repos.forEach(({ owner, repo }, i) => {
-				for (const pr of data[`f${i}`]?.nodes ?? []) {
+			await Promise.all(
+				repos.map(async ({ owner, repo }, i) => {
+				const raw = data[`f${i}`];
+				// Drain >100 merged PRs/month so flow medians and bot counts are complete.
+				const nodes = raw?.pageInfo?.hasNextPage
+					? await drainSearchNodes(gql, mergedFlowQuery(owner, repo), FLOW_PR_NODE_FIELDS, raw)
+					: (raw?.nodes ?? []);
+				for (const pr of nodes) {
 					if (!pr?.createdAt || !pr?.mergedAt) continue;
 					const submitted: any[] = (pr.reviews?.nodes ?? []).filter(
 						(r: any) => r?.submittedAt && r.author?.login
@@ -703,7 +719,8 @@ export async function fetchPrFlow(
 						reviewers
 					});
 				}
-			});
+				})
+			);
 		})
 	);
 	const botActivity = [...botAcc.values()].sort(
