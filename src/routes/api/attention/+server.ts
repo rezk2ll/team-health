@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import { getAttention } from '$lib/server/attention-cache';
 import { parseRepoSelection } from '$lib/server/selection';
-import { GitHubError, RateLimitError } from '$lib/server/github/client';
+import { throwUpstreamError } from '$lib/server/api-errors';
 import { audit } from '$lib/server/store/audit';
 import type { RequestHandler } from './$types';
 
@@ -18,11 +18,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		await audit(locals.user.sub, 'attention.view', { repos: repos.length });
 		return json(result);
 	} catch (e) {
-		if (e instanceof RateLimitError) throw error(429, e.message);
-		if (e instanceof GitHubError) {
-			console.error('[api/attention] GitHub error:', (e as Error).message);
-			throw error(502, 'Upstream GitHub request failed');
-		}
-		throw e;
+		throwUpstreamError(e, 'api/attention');
 	}
 };

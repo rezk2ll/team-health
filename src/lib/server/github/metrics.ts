@@ -1,6 +1,6 @@
 import { type GraphQL } from './client';
 import { median, std, round, isBugLabel } from './stats';
-import { type Month, monthKey, monthStart, monthEnd } from './months';
+import { type Month, monthKey, monthStart, monthEnd, monthStartMs, monthEndMs } from './months';
 import type { Repo, Member, RepoMonth, OpenPr, PrFlow } from './types';
 import type { MemberRepoMonthRow, ReviewRepoMonthRow } from '../store/assemble';
 
@@ -260,7 +260,7 @@ async function fetchReleases(gql: GraphQL, owner: string, repo: string, months: 
 	if (!months.length) return counts;
 	// Releases are newest-first; page until we pass the start of the window so a
 	// repo with >100 recent releases doesn't truncate older requested months.
-	const windowStartMs = Date.parse(monthStart(months[0]) + 'T00:00:00Z');
+	const windowStartMs = monthStartMs(months[0]);
 	let cursor: string | null = null;
 	for (let page = 0; page < 10; page++) {
 		const data = await gql(`{
@@ -387,8 +387,8 @@ export async function fetchMemberRepoMonthRows(
 	const commitWork = Promise.all(
 		months.map(async (m) => {
 			const month = monthKey(m);
-			const startMs = Date.parse(monthStart(m) + 'T00:00:00Z');
-			const endMs = Date.parse(monthEnd(m) + 'T23:59:59.999Z');
+			const startMs = monthStartMs(m);
+			const endMs = monthEndMs(m);
 			const commitData = await fetchCommitData(gql, repos, m);
 			repos.forEach(({ owner, repo }, i) => {
 				const prCommits: CommitNode[] = (commitData[`pr${i}`]?.nodes ?? []).flatMap(
@@ -448,8 +448,8 @@ export async function fetchReviewRepoMonthRows(gql: GraphQL, repos: Repo[], mont
 	await Promise.all(
 		months.map(async (m) => {
 			const month = monthKey(m);
-			const startMs = Date.parse(monthStart(m) + 'T00:00:00Z');
-			const endMs = Date.parse(monthEnd(m) + 'T23:59:59.999Z');
+			const startMs = monthStartMs(m);
+			const endMs = monthEndMs(m);
 			const blocks = repos.map(
 				({ owner, repo }, i) => `
       r${i}: search(query: "repo:${owner}/${repo} type:pr updated:${monthStart(m)}..${monthEnd(m)}", type: ISSUE, first: 100) {

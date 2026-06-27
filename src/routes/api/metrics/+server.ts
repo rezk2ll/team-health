@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import { getMetrics } from '$lib/server/metrics-cache';
 import { parseSelection } from '$lib/server/selection';
 import { defaultSelection } from '$lib/server/preset';
-import { GitHubError, RateLimitError } from '$lib/server/github/client';
+import { throwUpstreamError } from '$lib/server/api-errors';
 import { audit } from '$lib/server/store/audit';
 import type { RequestHandler } from './$types';
 
@@ -23,12 +23,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		});
 		return json(result);
 	} catch (e) {
-		if (e instanceof RateLimitError) throw error(429, e.message);
-		if (e instanceof GitHubError) {
-			console.error('[api/metrics] GitHub error:', (e as Error).message);
-			throw error(502, 'Upstream GitHub request failed');
-		}
-		throw e;
+		throwUpstreamError(e, 'api/metrics');
 	}
 };
 
@@ -37,11 +32,6 @@ export const GET: RequestHandler = async () => {
 	try {
 		return json(await getMetrics(defaultSelection()));
 	} catch (e) {
-		if (e instanceof RateLimitError) throw error(429, e.message);
-		if (e instanceof GitHubError) {
-			console.error('[api/metrics] GitHub error:', (e as Error).message);
-			throw error(502, 'Upstream GitHub request failed');
-		}
-		throw e;
+		throwUpstreamError(e, 'api/metrics');
 	}
 };

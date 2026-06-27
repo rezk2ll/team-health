@@ -24,7 +24,7 @@ export function isAdmin(sub: string | undefined | null): boolean {
 
 // Generic OIDC client pointed at the registration service (authorization code +
 // PKCE; session in an encrypted JWT cookie — no server-side session store).
-export const { handle: authHandle, signIn, signOut } = SvelteKitAuth({
+export const { handle: authHandle, signOut } = SvelteKitAuth({
 	trustHost: true,
 	secret: env.AUTH_SECRET,
 	providers: [
