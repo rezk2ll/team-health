@@ -170,29 +170,43 @@ const mergedVolumeQuery = (owner: string, repo: string, m: Month) =>
 const openedIssueQuery = (owner: string, repo: string, m: Month) =>
 	`repo:${owner}/${repo} type:issue created:${monthStart(m)}..${monthEnd(m)} sort:created-asc`;
 
+type Page<T> = { nodes?: T[]; pageInfo?: { hasNextPage?: boolean; endCursor?: string } };
+
+/** Drain a Relay-style cursor connection past its first page. `fetchPage(after)`
+ * returns the next page's nodes and the cursor to continue (null when done).
+ * Capped so a stuck/repeating cursor can never loop unbounded. */
+async function drainConnection<T>(
+	first: Page<T>,
+	fetchPage: (after: string) => Promise<{ nodes: T[]; cursor: string | null }>,
+	maxPages = 20
+): Promise<T[]> {
+	const nodes = [...(first.nodes ?? [])];
+	let cursor = first.pageInfo?.hasNextPage ? (first.pageInfo.endCursor ?? null) : null;
+	for (let page = 0; cursor && page < maxPages; page++) {
+		const next = await fetchPage(cursor);
+		nodes.push(...next.nodes);
+		cursor = next.cursor;
+	}
+	return nodes;
+}
+
 /** Collect every node of a search, draining past the first 100 (GitHub Search
  * caps the total result set at 1000). `first` is the already-fetched first page. */
 async function drainSearchNodes(
 	gql: GraphQL,
 	query: string,
 	fields: string,
-	first: { nodes?: any[]; pageInfo?: { hasNextPage?: boolean; endCursor?: string } }
+	first: Page<any>
 ): Promise<any[]> {
-	const nodes = [...(first.nodes ?? [])];
-	let cursor = first.pageInfo?.hasNextPage ? first.pageInfo.endCursor : null;
-	let guard = 0;
-	while (cursor && guard++ < 12) {
+	return drainConnection(first, async (after) => {
 		const data: any = await gql(
-			`{ search(query: ${JSON.stringify(query)}, type: ISSUE, first: 100, after: "${cursor}") {
+			`{ search(query: ${JSON.stringify(query)}, type: ISSUE, first: 100, after: "${after}") {
         nodes { ${fields} } pageInfo { hasNextPage endCursor }
       } }`
 		);
 		const sr = data.search;
-		if (!sr) break;
-		nodes.push(...(sr.nodes ?? []));
-		cursor = sr.pageInfo?.hasNextPage ? sr.pageInfo.endCursor : null;
-	}
-	return nodes;
+		return { nodes: sr?.nodes ?? [], cursor: sr?.pageInfo?.hasNextPage ? (sr.pageInfo.endCursor ?? null) : null };
+	});
 }
 
 function prAliasBlock(owner: string, repo: string, m: Month, i: number): string {
@@ -482,17 +496,14 @@ export async function fetchMemberRepoMonthRows(
 					const prCommits: CommitNode[] = (commitData[`pr${i}`]?.nodes ?? []).flatMap(
 						(pr: any) => (pr?.commits?.nodes ?? []).map((c: any) => c.commit)
 					);
-					const history = commitData[`main${i}`]?.defaultBranchRef?.target?.history;
-					const mainCommits: CommitNode[] = [...(history?.nodes ?? [])];
 					// Drain repos with >100 default-branch commits this month (the batched
 					// query only returns the first page) so commit counts aren't truncated.
-					// Guarded so a stuck/repeating cursor can't loop unbounded.
-					let cursor: string | null = history?.pageInfo?.hasNextPage ? history.pageInfo.endCursor : null;
-					for (let guard = 0; cursor && guard < 50; guard++) {
-						const page = await fetchHistoryPage(gql, owner, repo, monthStart(m), monthEnd(m), cursor);
-						mainCommits.push(...page.nodes);
-						cursor = page.cursor;
-					}
+					const history = commitData[`main${i}`]?.defaultBranchRef?.target?.history;
+					const mainCommits: CommitNode[] = await drainConnection<CommitNode>(
+						history ?? {},
+						async (after) => fetchHistoryPage(gql, owner, repo, monthStart(m), monthEnd(m), after),
+						50
+					);
 					const shas = new Map<string, Set<string>>(); // member login -> unique SHAs
 					const add = (login: string, oid: string) => {
 						let s = shas.get(login);
