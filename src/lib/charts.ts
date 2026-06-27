@@ -152,15 +152,14 @@ export type ReviewDatum = { name: string; reviews: number; comments: number };
 /** Per-member review + PR-comment activity, with non-team authors folded into "Others". */
 export function reviewActivityChart(data: MetricsResult, config: AppConfig): ReviewDatum[] {
 	const members = activeMembers(config);
-	const loginToName = new Map(members.map((m) => [m.login, m.name]));
+	// Key by login (not display name) so two members who share a name don't merge.
 	const result = new Map<string, ReviewDatum>(
-		members.map((m) => [m.name, { name: m.name, reviews: 0, comments: 0 }])
+		members.map((m) => [m.login, { name: m.name, reviews: 0, comments: 0 }])
 	);
 	const others: ReviewDatum = { name: 'Others', reviews: 0, comments: 0 };
 
 	for (const r of data.reviewActivity) {
-		const name = loginToName.get(r.author);
-		const target = name ? result.get(name)! : others;
+		const target = result.get(r.author) ?? others;
 		target.reviews += r.reviews;
 		target.comments += r.comments;
 	}

@@ -3,7 +3,6 @@ import {
 	prStatsForMonth,
 	issueStatsForMonth,
 	reviewCountsFromNodes,
-	commitShasForMember,
 	pickCommitMember
 } from './metrics';
 import { median, std, isBugLabel } from './stats';
@@ -136,31 +135,20 @@ describe('reviewCountsFromNodes', () => {
 	});
 });
 
-describe('commitShasForMember', () => {
-	const start = Date.parse('2026-05-01T00:00:00Z');
-	const end = Date.parse('2026-05-31T23:59:59Z');
-	const member = { login: 'alice', name: 'Alice', email: 'a@x.io' };
-	it('dedupes by sha across PR + main, matches by login or email, filters PR commits by date', () => {
-		const prCommits = [
-			{ oid: 'sha1', committedDate: '2026-05-10T00:00:00Z', author: { email: null, user: { login: 'alice' } } },
-			{ oid: 'sha1', committedDate: '2026-05-10T00:00:00Z', author: { email: null, user: { login: 'alice' } } }, // dup
-			{ oid: 'sha2', committedDate: '2026-04-10T00:00:00Z', author: { email: null, user: { login: 'alice' } } }, // out of window
-			{ oid: 'sha3', committedDate: '2026-05-10T00:00:00Z', author: { email: 'a@x.io', user: null } } // email match
-		];
-		const mainCommits = [
-			{ oid: 'sha4', committedDate: '2026-05-15T00:00:00Z', author: { email: null, user: { login: 'alice' } } },
-			{ oid: 'sha5', committedDate: '2026-05-15T00:00:00Z', author: { email: null, user: { login: 'bob' } } } // not alice
-		];
-		const shas = commitShasForMember(prCommits, mainCommits, member, start, end);
-		expect([...shas].sort()).toEqual(['sha1', 'sha3', 'sha4']);
+describe('pickCommitMember', () => {
+	const byLogin = new Map([['alice', 'alice']]);
+	const byEmail = new Map([['a@x.io', 'alice']]);
+	it('attributes a linked GitHub user to the matching member', () => {
+		expect(pickCommitMember({ email: null, user: { login: 'Alice' } }, byLogin, byEmail)).toBe('alice');
 	});
-
-	it('skips commits with a null author instead of crashing', () => {
-		const prCommits = [
-			{ oid: 'sha1', committedDate: '2026-05-10T00:00:00Z', author: null as unknown as { email: string | null; user: { login: string } | null } },
-			{ oid: 'sha2', committedDate: '2026-05-10T00:00:00Z', author: { email: null, user: { login: 'alice' } } }
-		];
-		const shas = commitShasForMember(prCommits, [], member, start, end);
-		expect([...shas]).toEqual(['sha2']);
+	it('falls back to email only when there is no linked user', () => {
+		expect(pickCommitMember({ email: 'a@x.io', user: null }, byLogin, byEmail)).toBe('alice');
+	});
+	it('does not steal a non-member commit via a matching email when a user is linked', () => {
+		// Linked GitHub user is non-member: authoritative, so no email fallback.
+		expect(pickCommitMember({ email: 'a@x.io', user: { login: 'alice-alt' } }, byLogin, byEmail)).toBeNull();
+	});
+	it('returns null for a null author', () => {
+		expect(pickCommitMember(null, byLogin, byEmail)).toBeNull();
 	});
 });
