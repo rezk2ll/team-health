@@ -49,8 +49,8 @@ export function defaultTeams(): Team[] {
 
 export const DEFAULT_MONTHS = Number(env.DEFAULT_MONTHS ?? 12);
 export const DEFAULT_MEMBER_MONTHS = Number(env.DEFAULT_MEMBER_MONTHS ?? 3);
-// Long window for the org-wide trend view (so an AI-adoption inflection is visible).
-export const GLOBAL_MONTHS = Number(env.GLOBAL_MONTHS ?? 18);
+// Window for the org-wide trend view; matches the per-team window by default.
+export const GLOBAL_MONTHS = Number(env.GLOBAL_MONTHS ?? 12);
 
 function parseRepoRef(r: unknown): Repo | null {
 	if (typeof r === 'string' && r.includes('/')) {
