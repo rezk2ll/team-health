@@ -1,6 +1,7 @@
 import { env } from '$env/dynamic/private';
 import { graphql, type GraphQL } from './github/client';
 import { fetchOpenPullRequests } from './github/metrics';
+import { getAppSettings } from './app-config';
 import type { Repo, OpenPr, AttentionItem, AttentionReason, AttentionResult } from './github/types';
 
 const DAY_MS = 86_400_000;
@@ -11,7 +12,12 @@ const AGING_DAYS = Number(env.ATTENTION_AGING_DAYS ?? 14); // open for two weeks
 
 /** Classify currently-open PRs into a ranked worklist. Pure: only PRs that need
  * a human are returned, most-stuck first. */
-export function buildWorklist(prs: OpenPr[], now: number): AttentionResult {
+export function buildWorklist(
+	prs: OpenPr[],
+	now: number,
+	staleDays: number = STALE_DAYS,
+	agingDays: number = AGING_DAYS
+): AttentionResult {
 	const items: AttentionItem[] = prs
 		// Bot PRs (dependabot etc.) are handled by other automation, not a review
 		// worklist; including them buries the human PRs that actually need a person.
@@ -21,12 +27,12 @@ export function buildWorklist(prs: OpenPr[], now: number): AttentionResult {
 			const idleDays = Math.max(0, Math.floor((now - Date.parse(pr.updatedAt)) / DAY_MS));
 			const reasons: AttentionReason[] = [];
 			if (pr.draft) {
-				if (ageDays >= AGING_DAYS) reasons.push('draft_stale');
+				if (ageDays >= agingDays) reasons.push('draft_stale');
 			} else {
 				if (pr.reviewDecision === 'CHANGES_REQUESTED') reasons.push('changes_requested');
 				if (pr.reviews === 0 && ageDays >= 1) reasons.push('unreviewed');
-				if (idleDays >= STALE_DAYS) reasons.push('stale');
-				if (ageDays >= AGING_DAYS) reasons.push('aging');
+				if (idleDays >= staleDays) reasons.push('stale');
+				if (ageDays >= agingDays) reasons.push('aging');
 			}
 			const priority =
 				ageDays +
@@ -47,6 +53,7 @@ export function buildWorklist(prs: OpenPr[], now: number): AttentionResult {
 
 /** Fetch + classify the open-PR worklist for a set of repos. */
 export async function getAttentionReport(repos: Repo[], now = Date.now(), gql: GraphQL = graphql): Promise<AttentionResult> {
+	const settings = await getAppSettings();
 	const prs = await fetchOpenPullRequests(gql, repos);
-	return buildWorklist(prs, now);
+	return buildWorklist(prs, now, settings.attentionStaleDays, settings.attentionAgingDays);
 }

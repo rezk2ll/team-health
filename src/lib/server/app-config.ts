@@ -2,12 +2,14 @@
 // An empty/missing row leaves behavior identical to a pure-env setup. ALLOWED_ORGS
 // is deliberately NOT overridable here: it's the authorization boundary for the
 // privileged token and must stay env-controlled.
+import { env } from '$env/dynamic/private';
 import { eq } from 'drizzle-orm';
 import { db, hasDb } from './db';
 import { appConfig } from './db/schema';
 import { parseRepos } from './validate';
 import { allowedOrgs } from './discovery';
 import { DEFAULT_MONTHS, DEFAULT_MEMBER_MONTHS, GLOBAL_MONTHS, defaultGlobalRepos } from './preset';
+import { DEFAULT_TARGETS, type Targets } from '$lib/signals';
 import type { Repo } from './github/types';
 
 export type AppSettings = {
@@ -15,6 +17,10 @@ export type AppSettings = {
 	globalMonths: number;
 	defaultMonths: number;
 	defaultMemberMonths: number;
+	// Health thresholds: Signals targets + Attention staleness windows (days).
+	signals: Targets;
+	attentionStaleDays: number;
+	attentionAgingDays: number;
 };
 
 const CONFIG_ID = 'app';
@@ -27,7 +33,10 @@ function envSettings(): AppSettings {
 		globalRepos: defaultGlobalRepos(),
 		globalMonths: GLOBAL_MONTHS,
 		defaultMonths: DEFAULT_MONTHS,
-		defaultMemberMonths: DEFAULT_MEMBER_MONTHS
+		defaultMemberMonths: DEFAULT_MEMBER_MONTHS,
+		signals: DEFAULT_TARGETS,
+		attentionStaleDays: Number(env.ATTENTION_STALE_DAYS ?? 7),
+		attentionAgingDays: Number(env.ATTENTION_AGING_DAYS ?? 14)
 	};
 }
 
@@ -35,6 +44,27 @@ const months = (n: unknown): number | undefined => {
 	const v = Number(n);
 	return Number.isInteger(v) && v >= 1 && v <= 36 ? v : undefined;
 };
+
+const days = (n: unknown): number | undefined => {
+	const v = Number(n);
+	return Number.isInteger(v) && v >= 1 && v <= 365 ? v : undefined;
+};
+
+// Merge any valid numeric Targets fields over the defaults; unknown/invalid drop.
+function sanitizeTargets(o: unknown): Targets | undefined {
+	if (!o || typeof o !== 'object') return undefined;
+	const s = o as Record<string, unknown>;
+	const merged = { ...DEFAULT_TARGETS };
+	let any = false;
+	for (const k of Object.keys(DEFAULT_TARGETS) as (keyof Targets)[]) {
+		const v = Number(s[k]);
+		if (Number.isFinite(v) && v >= 0) {
+			merged[k] = v;
+			any = true;
+		}
+	}
+	return any ? merged : undefined;
+}
 
 /** Normalize an untrusted overrides object: repos are allowlist-validated and
  * windows clamped; invalid/unknown fields are dropped. */
@@ -50,6 +80,12 @@ function sanitize(o: Record<string, unknown>): Partial<AppSettings> {
 	if (gm) out.globalMonths = gm;
 	if (dm) out.defaultMonths = dm;
 	if (mm) out.defaultMemberMonths = mm;
+	const signals = sanitizeTargets(o.signals);
+	if (signals) out.signals = signals;
+	const sd = days(o.attentionStaleDays);
+	const ad = days(o.attentionAgingDays);
+	if (sd) out.attentionStaleDays = sd;
+	if (ad) out.attentionAgingDays = ad;
 	return out;
 }
 

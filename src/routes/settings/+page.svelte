@@ -18,6 +18,9 @@
 	let globalMonths = $state(s.globalMonths);
 	let defaultMonths = $state(s.defaultMonths);
 	let defaultMemberMonths = $state(s.defaultMemberMonths);
+	let attentionStaleDays = $state(s.attentionStaleDays);
+	let attentionAgingDays = $state(s.attentionAgingDays);
+	let signals = $state({ ...s.signals });
 	let repoKeys = $state<string[]>([...initialKeys]);
 
 	let saving = $state(false);
@@ -34,6 +37,22 @@
 		{ label: 'Member window (months)', get: () => defaultMemberMonths, set: (v: number) => (defaultMemberMonths = v) }
 	];
 
+	// Curated Signals targets (the "warn" line for the headline metrics); the rest
+	// of the Targets keep their defaults.
+	const targetFields: { key: keyof typeof signals; label: string }[] = [
+		{ key: 'firstReviewWarnH', label: 'First review within (h)' },
+		{ key: 'cycleWarnH', label: 'Cycle time within (h)' },
+		{ key: 'reviewedWarnPct', label: 'Review coverage above (%)' },
+		{ key: 'throughputDropWarnPct', label: 'Throughput drop warns at (%)' },
+		{ key: 'busShareWarnPct', label: 'Knowledge concentration at (%)' },
+		{ key: 'reviewShareWarnPct', label: 'Review-load imbalance at (%)' }
+	];
+
+	const attentionFields = [
+		{ label: 'PR stale after (days)', get: () => attentionStaleDays, set: (v: number) => (attentionStaleDays = v) },
+		{ label: 'PR aging after (days)', get: () => attentionAgingDays, set: (v: number) => (attentionAgingDays = v) }
+	];
+
 	async function save() {
 		saving = true;
 		saved = false;
@@ -45,7 +64,10 @@
 				globalRepos: repoKeys.map(parseRepoKey),
 				globalMonths,
 				defaultMonths,
-				defaultMemberMonths
+				defaultMemberMonths,
+				attentionStaleDays,
+				attentionAgingDays,
+				signals
 			})
 		});
 		saving = false;
@@ -57,6 +79,9 @@
 			globalMonths = saved2.globalMonths;
 			defaultMonths = saved2.defaultMonths;
 			defaultMemberMonths = saved2.defaultMemberMonths;
+			attentionStaleDays = saved2.attentionStaleDays;
+			attentionAgingDays = saved2.attentionAgingDays;
+			signals = { ...saved2.signals };
 			repoKeys = saved2.globalRepos.map(repoKey);
 			saved = true;
 		} else {
@@ -102,6 +127,50 @@
 					/>
 				</label>
 			{/each}
+		</div>
+
+		<!-- Health targets (Signals) -->
+		<div class="border-t border-[var(--color-ink-200)] pt-5">
+			<div class="font-display text-lg leading-none">Health targets</div>
+			<div class="mt-1.5 text-xs text-[var(--color-ink-600)]">
+				The "good vs needs attention" lines on the Signals page.
+			</div>
+			<div class="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+				{#each targetFields as f (f.key)}
+					<label class="block">
+						<span class="eyebrow mb-2 block">{f.label}</span>
+						<input
+							type="number"
+							min="0"
+							bind:value={signals[f.key]}
+							class="h-9 w-full rounded-lg border border-[var(--color-ink-300)] bg-[var(--color-card)] px-2.5 text-sm tabular"
+						/>
+					</label>
+				{/each}
+			</div>
+		</div>
+
+		<!-- Attention windows -->
+		<div class="border-t border-[var(--color-ink-200)] pt-5">
+			<div class="font-display text-lg leading-none">Attention windows</div>
+			<div class="mt-1.5 text-xs text-[var(--color-ink-600)]">
+				When an open PR is flagged stale or aging on the Attention page.
+			</div>
+			<div class="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+				{#each attentionFields as f (f.label)}
+					<label class="block">
+						<span class="eyebrow mb-2 block">{f.label}</span>
+						<input
+							type="number"
+							min="1"
+							max="365"
+							value={f.get()}
+							oninput={(e) => f.set(Number(e.currentTarget.value))}
+							class="h-9 w-full rounded-lg border border-[var(--color-ink-300)] bg-[var(--color-card)] px-2.5 text-sm tabular"
+						/>
+					</label>
+				{/each}
+			</div>
 		</div>
 
 		<div class="flex items-center gap-3 border-t border-[var(--color-ink-200)] pt-4">
