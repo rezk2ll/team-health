@@ -12,8 +12,8 @@ export type Signal = {
 	value: string;
 	target: string;
 	detail: string;
-	/** A member this signal points at, rendered as an avatar + link to their profile. */
-	person?: { login: string; note: string };
+	/** Members this signal points at, each rendered as an avatar + link to their profile. */
+	people?: { login: string; note: string }[];
 };
 
 export type Targets = {
@@ -177,7 +177,7 @@ export function computeSignals(
 				target: `under ${t.reviewShareWarnPct}%`,
 				detail: `Reviewing is concentrated on the busiest of ${flow.reviewerLoad.length} reviewers.`,
 				...(pct >= t.reviewShareWarnPct
-					? { person: { login: top.reviewer, note: `did ${pct}% of reviews` } }
+					? { people: [{ login: top.reviewer, note: `did ${pct}% of reviews` }] }
 					: {})
 			});
 		}
@@ -224,14 +224,16 @@ export function computeSignals(
 			}
 			byRepo.set(c.repo, e);
 		}
-		let concentrated = 0;
-		let worst = { repo: '', pct: 0, author: '' };
+		const concentratedList: { login: string; note: string; pct: number }[] = [];
 		for (const [repo, e] of byRepo) {
 			if (e.total < t.busMinCommits) continue;
 			const pct = Math.round((e.top / e.total) * 100);
-			if (pct >= t.busShareWarnPct) concentrated += 1;
-			if (pct > worst.pct) worst = { repo, pct, author: e.topAuthor };
+			if (pct >= t.busShareWarnPct && e.topAuthor) {
+				concentratedList.push({ login: e.topAuthor, note: `wrote ${pct}% of ${repo}`, pct });
+			}
 		}
+		concentratedList.sort((a, b) => b.pct - a.pct);
+		const concentrated = concentratedList.length;
 		out.push({
 			id: 'bus-factor',
 			level: highIsBad(concentrated, t.concentratedWarn, t.concentratedBad),
@@ -241,9 +243,7 @@ export function computeSignals(
 			detail: concentrated
 				? `${concentrated} ${concentrated === 1 ? 'repository depends' : 'repositories depend'} on a single maintainer.`
 				: 'No single-maintainer repositories detected.',
-			...(concentrated && worst.author
-				? { person: { login: worst.author, note: `wrote ${worst.pct}% of ${worst.repo}` } }
-				: {})
+			...(concentrated ? { people: concentratedList.map(({ login, note }) => ({ login, note })) } : {})
 		});
 	}
 

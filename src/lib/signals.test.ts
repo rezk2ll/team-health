@@ -122,8 +122,8 @@ describe('computeSignals', () => {
 		]);
 		const sig = find(computeSignals(m, null, null), 'bus-factor');
 		expect(sig?.value).toBe('1 repos');
-		expect(sig?.person?.login).toBe('solo');
-		expect(sig?.person?.note).toContain('o/a');
+		expect(sig?.people?.[0]?.login).toBe('solo');
+		expect(sig?.people?.[0]?.note).toContain('o/a');
 	});
 
 	it('passes when commits are well spread', () => {

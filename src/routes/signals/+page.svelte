@@ -89,15 +89,19 @@
 									<span class="font-display text-base text-[var(--color-ink-950)]">{s.title}</span>
 								</div>
 								<p class="mt-2 text-sm leading-relaxed text-[var(--color-ink-700)]">{s.detail}</p>
-								{#if s.person}
-									<a
-										href="/people/{s.person.login}"
-										class="mt-2.5 inline-flex items-center gap-2 text-sm text-[var(--color-ink-800)] hover:text-[var(--color-brand)]"
-									>
-										<Avatar login={s.person.login} name={s.person.login} size={22} />
-										<span class="font-medium hover:underline">{s.person.login}</span>
-										<span class="text-[var(--color-ink-500)]">{s.person.note}</span>
-									</a>
+								{#if s.people?.length}
+									<div class="mt-2.5 flex flex-col gap-1.5">
+										{#each s.people as p (p.login + p.note)}
+											<a
+												href="/people/{p.login}"
+												class="inline-flex items-center gap-2 text-sm text-[var(--color-ink-800)] hover:text-[var(--color-brand)]"
+											>
+												<Avatar login={p.login} name={p.login} size={22} />
+												<span class="font-medium hover:underline">{p.login}</span>
+												<span class="text-[var(--color-ink-500)]">{p.note}</span>
+											</a>
+										{/each}
+									</div>
 								{/if}
 							</div>
 							<div class="shrink-0 text-right">
