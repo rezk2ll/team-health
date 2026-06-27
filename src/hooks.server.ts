@@ -1,5 +1,5 @@
 import { sequence } from '@sveltejs/kit/hooks';
-import { redirect, type Handle } from '@sveltejs/kit';
+import { redirect, type Handle, type HandleServerError } from '@sveltejs/kit';
 import { authHandle, AUTH_DISABLED } from '$lib/server/auth';
 import { logEvent } from '$lib/server/store/audit';
 
@@ -113,3 +113,21 @@ const securityHeaders: Handle = async ({ event, resolve }) => {
 export const handle: Handle = AUTH_DISABLED
 	? sequence(logEvents, guard, securityHeaders)
 	: sequence(authHandle, logEvents, guard, securityHeaders);
+
+// Capture unexpected (5xx) errors with their message into the event log, and
+// return a safe message so internals never reach the client.
+export const handleError: HandleServerError = ({ error, event, status, message }) => {
+	const user = event.locals.user;
+	void logEvent({
+		userSub: user?.sub ?? 'anonymous',
+		userEmail: user?.email ?? null,
+		kind: 'http',
+		action: `error ${status} ${event.url.pathname}`,
+		method: event.request.method,
+		path: event.url.pathname,
+		status,
+		suspicious: false,
+		detail: { message: (error as Error)?.message ?? String(error) }
+	});
+	return { message: status >= 500 ? 'Internal error' : message };
+};
