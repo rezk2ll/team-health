@@ -7,8 +7,9 @@
 	import { metrics } from '$lib/client/metrics.svelte';
 	import { scope } from '$lib/client/scope.svelte';
 	import { fmtNum, fmtMonth } from '$lib/utils';
-	import { ArrowUpRight, AlertCircle, GitBranch, Users, Activity, Loader2, FileDown } from '@lucide/svelte';
+	import { ArrowUpRight, AlertCircle, GitBranch, Users, Activity, Loader2, FileDown, Zap, GitMerge, ShieldCheck, MessageSquare, Scale, Compass, Trophy } from '@lucide/svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
+	import { computeAwards } from '$lib/awards';
 
 	let { data } = $props();
 
@@ -17,6 +18,17 @@
 	// the default team during SSR too (the scope store is client-only).
 	const stats = $derived(metrics.data ?? data.initial);
 	const team = $derived(scope.activeTeam ?? data.defaultTeams?.[0]);
+
+	// Playful per-member superlatives ("The Machine", etc.) for the standouts row.
+	const awards = $derived(stats ? computeAwards(stats, team?.members ?? []) : []);
+	const awardIcon: Record<string, typeof Zap> = {
+		commits: Zap,
+		merged: GitMerge,
+		reviews: ShieldCheck,
+		comments: MessageSquare,
+		lines: Scale,
+		breadth: Compass
+	};
 
 	const totalMonthly = $derived.by(() => {
 		const byMonth = new Map<string, { created: number; merged: number; bugs: number; issues: number }>();
@@ -276,6 +288,43 @@
 				</Card.Root>
 			</div>
 		</section>
+
+		<!-- MVP awards -->
+		{#if awards.length}
+			<section class="mt-16">
+				<div class="mb-6">
+					<div class="eyebrow mb-2">Standouts</div>
+					<h2 class="font-display text-[1.75rem] leading-none tracking-tight">The MVPs.</h2>
+					<p class="mt-2 max-w-xl text-sm text-[var(--color-ink-600)]">
+						Who led the pack this period, one trophy per stat.
+					</p>
+				</div>
+				<div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
+					{#each awards as a (a.key)}
+						{@const Icon = awardIcon[a.key] ?? Trophy}
+						<Card.Root class="gap-0 p-5 shadow-sm">
+							<div class="flex items-center gap-2 text-[var(--color-ink-500)]">
+								<Icon class="h-4 w-4" />
+								<span class="eyebrow">{a.tagline}</span>
+							</div>
+							<div class="mt-2 font-display text-xl text-[var(--color-ink-950)]">{a.title}</div>
+							<a
+								href="/people/{a.login}"
+								class="mt-3 flex items-center gap-2.5 hover:text-[var(--color-brand)]"
+							>
+								<Avatar login={a.login} name={a.name} size={36} />
+								<div class="min-w-0">
+									<div class="truncate text-sm font-medium text-[var(--color-ink-900)] hover:underline">
+										{a.name}
+									</div>
+									<div class="font-mono text-xs text-[var(--color-ink-600)]">{a.stat}</div>
+								</div>
+							</a>
+						</Card.Root>
+					{/each}
+				</div>
+			</section>
+		{/if}
 
 		<!-- Cadence -->
 		{#if totalMonthly.length > 0}
