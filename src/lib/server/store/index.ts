@@ -179,10 +179,8 @@ function repoMonthConflictSet() {
 		issuesOpen: 'issues_open',
 		bugsOpen: 'bugs_open',
 		prsOpen: 'prs_open',
-		prsStale: 'prs_stale',
 		releases: 'releases',
 		resolutionDays: 'resolution_days',
-		resolutionStd: 'resolution_std',
 		resolutionRate: 'resolution_rate'
 	};
 	const set: Record<string, unknown> = {};

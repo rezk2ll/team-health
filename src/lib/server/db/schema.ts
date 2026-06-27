@@ -41,10 +41,8 @@ export const repoMonth = pgTable(
 		issuesOpen: integer('issues_open').notNull(),
 		bugsOpen: integer('bugs_open').notNull(),
 		prsOpen: integer('prs_open').notNull(),
-		prsStale: integer('prs_stale').notNull(),
 		releases: integer('releases').notNull(),
 		resolutionDays: doublePrecision('resolution_days').notNull(),
-		resolutionStd: doublePrecision('resolution_std').notNull(),
 		resolutionRate: doublePrecision('resolution_rate').notNull(),
 		fetchedAt: timestamp('fetched_at', { withTimezone: true }).defaultNow().notNull()
 	},

@@ -22,10 +22,8 @@ export type RepoMonth = {
 	issuesOpen: number;
 	bugsOpen: number;
 	prsOpen: number;
-	prsStale: number;
 	releases: number;
 	resolutionDays: number;
-	resolutionStd: number;
 	resolutionRate: number;
 };
 
