@@ -12,6 +12,8 @@ export type Signal = {
 	value: string;
 	target: string;
 	detail: string;
+	/** A member this signal points at, rendered as an avatar + link to their profile. */
+	person?: { login: string; note: string };
 };
 
 export type Targets = {
@@ -165,15 +167,18 @@ export function computeSignals(
 		// Review-load balance: how much of the reviewing one person carries.
 		if (flow.reviewerLoad.length >= t.minReviewers) {
 			const total = flow.reviewerLoad.reduce((sum, r) => sum + r.prs, 0);
-			const top = Math.max(...flow.reviewerLoad.map((r) => r.prs));
-			const pct = total > 0 ? Math.round((top / total) * 100) : 0;
+			const top = flow.reviewerLoad.reduce((a, b) => (b.prs > a.prs ? b : a));
+			const pct = total > 0 ? Math.round((top.prs / total) * 100) : 0;
 			out.push({
 				id: 'review-load',
 				level: highIsBad(pct, t.reviewShareWarnPct, t.reviewShareBadPct),
 				title: 'Review load balance',
 				value: `${pct}%`,
 				target: `under ${t.reviewShareWarnPct}%`,
-				detail: `Share of all PR reviews carried by the busiest of ${flow.reviewerLoad.length} reviewers.`
+				detail: `Reviewing is concentrated on the busiest of ${flow.reviewerLoad.length} reviewers.`,
+				...(pct >= t.reviewShareWarnPct
+					? { person: { login: top.reviewer, note: `did ${pct}% of reviews` } }
+					: {})
 			});
 		}
 	}
@@ -209,20 +214,23 @@ export function computeSignals(
 	// Knowledge concentration (bus factor): repos where one person wrote most of
 	// the commits are a resignation/absence risk.
 	if (metrics && metrics.commitsByAuthorRepo.length) {
-		const byRepo = new Map<string, { total: number; top: number }>();
+		const byRepo = new Map<string, { total: number; top: number; topAuthor: string }>();
 		for (const c of metrics.commitsByAuthorRepo) {
-			const e = byRepo.get(c.repo) ?? { total: 0, top: 0 };
+			const e = byRepo.get(c.repo) ?? { total: 0, top: 0, topAuthor: '' };
 			e.total += c.commits;
-			e.top = Math.max(e.top, c.commits); // one row per (author, repo)
+			if (c.commits > e.top) {
+				e.top = c.commits; // one row per (author, repo)
+				e.topAuthor = c.author;
+			}
 			byRepo.set(c.repo, e);
 		}
 		let concentrated = 0;
-		let worst = { repo: '', pct: 0 };
+		let worst = { repo: '', pct: 0, author: '' };
 		for (const [repo, e] of byRepo) {
 			if (e.total < t.busMinCommits) continue;
 			const pct = Math.round((e.top / e.total) * 100);
 			if (pct >= t.busShareWarnPct) concentrated += 1;
-			if (pct > worst.pct) worst = { repo, pct };
+			if (pct > worst.pct) worst = { repo, pct, author: e.topAuthor };
 		}
 		out.push({
 			id: 'bus-factor',
@@ -231,8 +239,11 @@ export function computeSignals(
 			value: `${concentrated} repos`,
 			target: `under ${t.concentratedWarn}`,
 			detail: concentrated
-				? `${concentrated} repositories where one person wrote ≥${t.busShareWarnPct}% of commits (worst: ${worst.repo} at ${worst.pct}%).`
-				: 'No single-maintainer repositories detected.'
+				? `${concentrated} ${concentrated === 1 ? 'repository depends' : 'repositories depend'} on a single maintainer.`
+				: 'No single-maintainer repositories detected.',
+			...(concentrated && worst.author
+				? { person: { login: worst.author, note: `wrote ${worst.pct}% of ${worst.repo}` } }
+				: {})
 		});
 	}
 

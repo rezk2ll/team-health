@@ -113,7 +113,7 @@
 
 <Topbar
 	eyebrow="Overview"
-	title="The state of the team."
+	title="The state of {team?.name ?? 'the team'}."
 	subtitle="Delivery velocity, review depth, and incoming quality signals for {team?.name ?? 'your team'}."
 >
 	{#snippet actions()}
