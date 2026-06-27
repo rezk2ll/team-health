@@ -19,12 +19,11 @@ function chunk<T>(arr: T[], n: number): T[][] {
 // Pure aggregators (no I/O) — unit-tested against fixture GraphQL nodes.
 // ---------------------------------------------------------------------------
 
-type PrNode = {
+type MergedPrNode = {
 	additions: number;
 	deletions: number;
-	merged: boolean;
 	createdAt: string;
-	closedAt: string | null;
+	mergedAt: string;
 	comments: { totalCount: number };
 	reviews: { totalCount: number };
 };
@@ -43,9 +42,12 @@ export type PrStats = Pick<
 	| 'reviewsPerPr'
 >;
 
+/** Code-volume, lead-time, and engagement stats over the PRs MERGED in the month
+ * (so they reconcile with the merged count and the per-member rollup). `created`
+ * and `closed` are independent counts. */
 export function prStatsForMonth(
-	created: { issueCount: number; nodes: PrNode[] },
-	mergedCount: number,
+	merged: { issueCount: number; nodes: MergedPrNode[] },
+	createdCount: number,
 	closedCount: number
 ): PrStats {
 	const adds: number[] = [];
@@ -54,21 +56,20 @@ export function prStatsForMonth(
 	const comments: number[] = [];
 	const reviews: number[] = [];
 
-	for (const pr of created.nodes) {
-		comments.push(pr.comments.totalCount);
-		reviews.push(pr.reviews.totalCount);
-		if (pr.merged && pr.closedAt) {
-			adds.push(pr.additions);
-			dels.push(pr.deletions);
-			days.push(round((Date.parse(pr.closedAt) - Date.parse(pr.createdAt)) / DAY_MS, 2));
-		}
+	for (const pr of merged.nodes) {
+		if (!pr) continue; // partial 200s can null individual nodes
+		adds.push(pr.additions);
+		dels.push(pr.deletions);
+		comments.push(pr.comments?.totalCount ?? 0);
+		reviews.push(pr.reviews?.totalCount ?? 0);
+		days.push(round((Date.parse(pr.mergedAt) - Date.parse(pr.createdAt)) / DAY_MS, 2));
 	}
 
-	const total = created.issueCount;
+	const total = merged.issueCount;
 	const sumOf = (xs: number[]) => xs.reduce((s, v) => s + v, 0);
 	return {
-		created: total,
-		merged: mergedCount,
+		created: createdCount,
+		merged: total,
 		closed: closedCount,
 		additions: sumOf(adds),
 		deletions: sumOf(dels),
@@ -156,13 +157,16 @@ async function runChunkedAliases(
 
 // Node selections shared by the alias block and the pagination drainer so both
 // request identical fields.
-const PR_NODE_FIELDS = `... on PullRequest { additions deletions merged createdAt closedAt comments { totalCount } reviews { totalCount } }`;
+// Code-volume + lead-time stats are computed over the MERGED cohort (PRs merged
+// in the month), so they reconcile with the merged count and the per-member
+// rollup, which also use the merged cohort.
+const MERGED_VOLUME_FIELDS = `... on PullRequest { additions deletions createdAt mergedAt comments { totalCount } reviews { totalCount } }`;
 const ISSUE_NODE_FIELDS = `... on Issue { createdAt closedAt labels(first: 10) { nodes { name } } }`;
 const MERGED_PR_NODE_FIELDS = `... on PullRequest { author { login } additions deletions }`;
 const REVIEW_PR_NODE_FIELDS = `... on PullRequest { author { login } reviews(first: 50) { nodes { author { login } submittedAt state } } comments(first: 100) { nodes { author { login } createdAt } } }`;
 const FLOW_PR_NODE_FIELDS = `... on PullRequest { createdAt mergedAt reviews(first: 100) { nodes { submittedAt state author { login __typename } comments { totalCount } } } }`;
-const createdPrQuery = (owner: string, repo: string, m: Month) =>
-	`repo:${owner}/${repo} type:pr created:${monthStart(m)}..${monthEnd(m)} sort:created-asc`;
+const mergedVolumeQuery = (owner: string, repo: string, m: Month) =>
+	`repo:${owner}/${repo} type:pr is:merged merged:${monthStart(m)}..${monthEnd(m)} sort:created-asc`;
 const openedIssueQuery = (owner: string, repo: string, m: Month) =>
 	`repo:${owner}/${repo} type:issue created:${monthStart(m)}..${monthEnd(m)} sort:created-asc`;
 
@@ -195,12 +199,12 @@ function prAliasBlock(owner: string, repo: string, m: Month, i: number): string 
 	const s = monthStart(m);
 	const e = monthEnd(m);
 	return `
-    created_${i}: search(query: "${createdPrQuery(owner, repo, m)}", type: ISSUE, first: 100) {
+    created_${i}: search(query: "repo:${owner}/${repo} type:pr created:${s}..${e}", type: ISSUE, first: 1) { issueCount }
+    merged_${i}: search(query: "${mergedVolumeQuery(owner, repo, m)}", type: ISSUE, first: 100) {
       issueCount
-      nodes { ${PR_NODE_FIELDS} }
+      nodes { ${MERGED_VOLUME_FIELDS} }
       pageInfo { hasNextPage endCursor }
     }
-    merged_${i}: search(query: "repo:${owner}/${repo} type:pr is:merged merged:${s}..${e}", type: ISSUE, first: 1) { issueCount }
     closed_${i}: search(query: "repo:${owner}/${repo} type:pr is:closed closed:${s}..${e}", type: ISSUE, first: 1) { issueCount }`;
 }
 
@@ -225,11 +229,15 @@ function stockAliasBlock(owner: string, repo: string, m: Month, i: number): stri
 	const w = new Date(Date.parse(d) - 7 * DAY_MS).toISOString().slice(0, 10);
 	const r = (q: string, alias: string) =>
 		`${alias}_${i}: search(query: "repo:${owner}/${repo} ${q}", type: ISSUE, first: 1) { issueCount }`;
+	// Open-bug stock counts can't run the isBugLabel regex (search is label-exact),
+	// so OR the common bug-label variants it matches. Approximate (won't catch
+	// every custom form) but far closer than the literal `label:bug` alone.
+	const bugLabels = `label:bug,bugs,\\"type: bug\\",\\"type:bug\\",kind/bug`;
 	return [
 		r(`type:issue created:<=${d}`, 'i_open'),
 		r(`type:issue closed:<=${d}`, 'i_closed'),
-		r(`type:issue label:bug created:<=${d}`, 'b_open'),
-		r(`type:issue label:bug closed:<=${d}`, 'b_closed'),
+		r(`type:issue ${bugLabels} created:<=${d}`, 'b_open'),
+		r(`type:issue ${bugLabels} closed:<=${d}`, 'b_closed'),
 		r(`type:pr created:<=${d}`, 'p_open'),
 		r(`type:pr closed:<=${d}`, 'p_closed'),
 		r(`type:pr created:<=${w}`, 's_open'),
@@ -259,15 +267,15 @@ async function fetchRepoSeries(gql: GraphQL, { owner, repo }: Repo, months: Mont
 		const count = (alias: string) => stockData[alias]?.issueCount ?? 0;
 		// Drain past 100 nodes for high-volume months so sums/medians/bug counts
 		// reflect every PR/issue, not just the first page.
-		const createdRaw = prData[`created_${i}`] ?? emptySearch;
-		const createdNodes = createdRaw.pageInfo?.hasNextPage
-			? await drainSearchNodes(gql, createdPrQuery(owner, repo, m), PR_NODE_FIELDS, createdRaw)
-			: (createdRaw.nodes ?? []);
+		const mergedRaw = prData[`merged_${i}`] ?? emptySearch;
+		const mergedNodes = mergedRaw.pageInfo?.hasNextPage
+			? await drainSearchNodes(gql, mergedVolumeQuery(owner, repo, m), MERGED_VOLUME_FIELDS, mergedRaw)
+			: (mergedRaw.nodes ?? []);
 		const openedRaw = issueData[`opened_${i}`] ?? emptySearch;
 		const openedNodes = openedRaw.pageInfo?.hasNextPage
 			? await drainSearchNodes(gql, openedIssueQuery(owner, repo, m), ISSUE_NODE_FIELDS, openedRaw)
 			: (openedRaw.nodes ?? []);
-		const pr = prStatsForMonth({ issueCount: createdRaw.issueCount ?? 0, nodes: createdNodes }, prData[`merged_${i}`]?.issueCount ?? 0, prData[`closed_${i}`]?.issueCount ?? 0);
+		const pr = prStatsForMonth({ issueCount: mergedRaw.issueCount ?? 0, nodes: mergedNodes }, prData[`created_${i}`]?.issueCount ?? 0, prData[`closed_${i}`]?.issueCount ?? 0);
 		const iss = issueStatsForMonth({ issueCount: openedRaw.issueCount ?? 0, nodes: openedNodes }, issueData[`closed_${i}`]?.issueCount ?? 0);
 		const issuesOpen = Math.max(0, count(`i_open_${i}`) - count(`i_closed_${i}`));
 		const bugsOpen = Math.max(0, count(`b_open_${i}`) - count(`b_closed_${i}`));

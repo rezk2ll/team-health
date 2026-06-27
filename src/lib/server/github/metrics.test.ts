@@ -57,24 +57,23 @@ describe('months', () => {
 });
 
 describe('prStatsForMonth', () => {
-	it('uses median over merged PRs for add/del/days, median over all for comments/reviews', () => {
-		const created = {
-			issueCount: 3,
+	it('computes volume/lead-time/engagement over the merged cohort; created and closed are counts', () => {
+		const merged = {
+			issueCount: 2,
 			nodes: [
-				{ additions: 10, deletions: 2, merged: true, createdAt: '2026-05-01T00:00:00Z', closedAt: '2026-05-03T00:00:00Z', comments: { totalCount: 1 }, reviews: { totalCount: 2 } },
-				{ additions: 30, deletions: 6, merged: true, createdAt: '2026-05-01T00:00:00Z', closedAt: '2026-05-05T00:00:00Z', comments: { totalCount: 3 }, reviews: { totalCount: 4 } },
-				{ additions: 999, deletions: 999, merged: false, createdAt: '2026-05-04T00:00:00Z', closedAt: null, comments: { totalCount: 5 }, reviews: { totalCount: 0 } }
+				{ additions: 10, deletions: 2, createdAt: '2026-05-01T00:00:00Z', mergedAt: '2026-05-03T00:00:00Z', comments: { totalCount: 1 }, reviews: { totalCount: 2 } },
+				{ additions: 30, deletions: 6, createdAt: '2026-05-01T00:00:00Z', mergedAt: '2026-05-05T00:00:00Z', comments: { totalCount: 3 }, reviews: { totalCount: 4 } }
 			]
 		};
-		const s = prStatsForMonth(created, 2, 3);
-		expect(s).toMatchObject({ created: 3, merged: 2, closed: 3 });
+		const s = prStatsForMonth(merged, 3, 4); // createdCount=3, closedCount=4
+		expect(s).toMatchObject({ created: 3, merged: 2, closed: 4 });
 		expect(s.additions).toBe(40); // sum over merged: 10+30
 		expect(s.deletions).toBe(8); // sum over merged: 2+6
 		expect(s.addPerPr).toBe(20); // median(10,30)
 		expect(s.delPerPr).toBe(4); // median(2,6)
-		expect(s.daysPerPr).toBe(3); // median(2,4)
-		expect(s.commentsPerPr).toBe(3); // median(1,3,5)
-		expect(s.reviewsPerPr).toBe(2); // median(2,4,0)
+		expect(s.daysPerPr).toBe(3); // median(2,4) days (mergedAt - createdAt)
+		expect(s.commentsPerPr).toBe(2); // median(1,3)
+		expect(s.reviewsPerPr).toBe(3); // median(2,4)
 	});
 	it('zeros everything when there are no PRs', () => {
 		expect(prStatsForMonth({ issueCount: 0, nodes: [] }, 0, 0)).toMatchObject({
