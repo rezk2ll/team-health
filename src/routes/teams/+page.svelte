@@ -23,6 +23,17 @@
 		discovery.ensure();
 	});
 
+	// Preview the active team by default so the panel isn't empty on arrival.
+	let viewInitialized = false;
+	$effect(() => {
+		if (viewInitialized || draft) return;
+		const active = scope.activeTeam;
+		if (active) {
+			viewing = active;
+			viewInitialized = true;
+		}
+	});
+
 	type Draft = { id: string | null; name: string; members: Set<string>; repos: Set<string> };
 	let draft = $state<Draft | null>(null);
 	// A preconfigured team shown read-only in the detail panel.
@@ -130,7 +141,12 @@
 			<div class="space-y-2">
 				{#each scope.teams as t (t.id)}
 					<Card.Root
-						class="gap-0 p-4 shadow-sm cursor-pointer transition-shadow hover:shadow-md {t.id === scope.activeTeamId ? 'ring-2 ring-[var(--color-brand)]' : ''} {viewing?.id === t.id ? 'ring-2 ring-[var(--color-ink-300)]' : ''}"
+						class="gap-0 p-4 shadow-sm cursor-pointer transition-shadow hover:shadow-md {t.id ===
+						scope.activeTeamId
+							? 'ring-2 ring-[var(--color-brand)] bg-[var(--color-brand)]/5'
+							: viewing?.id === t.id
+								? 'bg-[var(--color-ink-100)]'
+								: ''}"
 						role="button"
 						tabindex={0}
 						onclick={() => view(t)}

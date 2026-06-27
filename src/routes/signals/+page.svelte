@@ -7,6 +7,7 @@
 	import { scope } from '$lib/client/scope.svelte';
 	import { computeSignals, DEFAULT_TARGETS, type SignalLevel } from '$lib/signals';
 	import { AlertCircle, AlertTriangle, CheckCircle2, Loader2 } from '@lucide/svelte';
+	import Avatar from '$lib/components/Avatar.svelte';
 
 	const team = $derived(scope.activeTeam);
 
@@ -73,10 +74,13 @@
 			</div>
 			<div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
 				{#each problems as s (s.id)}
-					<Card.Root class="gap-0 p-5 shadow-sm" style="border-left: 3px solid {accent[s.level]}">
+					<Card.Root
+						class="gap-0 border p-5 shadow-sm"
+						style="border-left: 4px solid {accent[s.level]}; border-color: color-mix(in oklab, {accent[s.level]} 28%, var(--color-ink-200)); background: color-mix(in oklab, {accent[s.level]} 8%, var(--color-card))"
+					>
 						<div class="flex items-start justify-between gap-4">
 							<div class="min-w-0">
-								<div class="flex items-center gap-2">
+								<div class="flex flex-wrap items-center gap-2">
 									{#if s.level === 'bad'}
 										<AlertCircle class="h-4 w-4 shrink-0" style="color: {accent[s.level]}" />
 									{:else}
@@ -84,10 +88,24 @@
 									{/if}
 									<span class="font-display text-base text-[var(--color-ink-950)]">{s.title}</span>
 								</div>
-								<p class="mt-2 text-sm leading-relaxed text-[var(--color-ink-600)]">{s.detail}</p>
+								<p class="mt-2 text-sm leading-relaxed text-[var(--color-ink-700)]">{s.detail}</p>
+								{#if s.people?.length}
+									<div class="mt-2.5 flex flex-col gap-1.5">
+										{#each s.people as p (p.login + p.note)}
+											<a
+												href="/people/{p.login}"
+												class="inline-flex items-center gap-2 text-sm text-[var(--color-ink-800)] hover:text-[var(--color-brand)]"
+											>
+												<Avatar login={p.login} name={p.login} size={22} />
+												<span class="font-medium hover:underline">{p.login}</span>
+												<span class="text-[var(--color-ink-500)]">{p.note}</span>
+											</a>
+										{/each}
+									</div>
+								{/if}
 							</div>
 							<div class="shrink-0 text-right">
-								<div class="font-mono text-lg tabular" style="color: {accent[s.level]}">{s.value}</div>
+								<div class="font-mono text-xl font-semibold tabular" style="color: {accent[s.level]}">{s.value}</div>
 								<div class="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-500)]">
 									target {s.target}
 								</div>

@@ -6,6 +6,7 @@
 	import { flow } from '$lib/client/flow.svelte';
 	import { fmtNum, fmtMonth } from '$lib/utils';
 	import { AlertCircle, Loader2 } from '@lucide/svelte';
+	import Avatar from '$lib/components/Avatar.svelte';
 
 	const team = $derived(scope.activeTeam);
 	// "the last N months" when rolling, else "N months ending <Month>".
@@ -101,9 +102,12 @@
 					<ul class="space-y-3.5">
 						{#each data.reviewerLoad as r (r.reviewer)}
 							<li>
-								<div class="mb-1.5 flex items-baseline justify-between text-xs">
-									<a href="/people/{r.reviewer}" class="text-[var(--color-ink-900)] hover:text-[var(--color-brand)] hover:underline">{name(r.reviewer)}</a>
-									<span class="font-mono tabular text-[var(--color-ink-600)]">{fmtNum(r.prs)} PRs</span>
+								<div class="mb-1.5 flex items-center justify-between gap-3 text-xs">
+									<a href="/people/{r.reviewer}" class="flex min-w-0 items-center gap-2 text-[var(--color-ink-900)] hover:text-[var(--color-brand)]">
+										<Avatar login={r.reviewer} name={name(r.reviewer)} size={20} />
+										<span class="truncate hover:underline">{name(r.reviewer)}</span>
+									</a>
+									<span class="font-mono tabular shrink-0 text-[var(--color-ink-600)]">{fmtNum(r.prs)} PRs</span>
 								</div>
 								<div class="h-1.5 w-full overflow-hidden rounded-full bg-[var(--color-ink-200)]">
 									<div class="h-full rounded-full bg-[var(--color-chart-5)]" style:width={`${(r.prs / max) * 100}%`}></div>
