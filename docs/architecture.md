@@ -23,22 +23,22 @@ Almost every design decision below follows from those two facts.
 
 ## High-level layers
 
-```
-Browser (Svelte 5 runes)
-   |  fetch POST /api/{metrics,flow,attention,discovery}
-   v
-SvelteKit endpoints  ──>  Auth + audit (hooks.server.ts)
-   |
-   v
-Report cache (Redis or in-memory, single-flight)
-   |  miss
-   v
-Report builder (report.ts)
-   |          |
-   |          +── persisted months ──> Postgres (Drizzle)
-   |
-   +── stale / current month ──> GitHub GraphQL client
-                                    (concurrency cap + rate-limit breaker)
+```mermaid
+flowchart TD
+    Browser["Browser (Svelte 5 runes)"]
+    Endpoints["SvelteKit endpoints"]
+    AuthAudit["Auth + audit (hooks.server.ts)"]
+    Cache["Report cache<br/>(Redis or in-memory, single-flight)"]
+    Builder["Report builder (report.ts)"]
+    Postgres[("Postgres (Drizzle)")]
+    GitHub["GitHub GraphQL client<br/>(concurrency cap + rate-limit breaker)"]
+
+    Browser -->|"POST /api/{metrics,flow,attention,discovery}"| Endpoints
+    Endpoints --> AuthAudit
+    Endpoints --> Cache
+    Cache -->|miss| Builder
+    Builder -->|persisted months| Postgres
+    Builder -->|stale / current month| GitHub
 ```
 
 Each layer has one job and degrades independently: lose Redis and it falls back
@@ -60,6 +60,31 @@ A team overview request walks through the stack like this:
    months are stale, and fetches only those from GitHub. Completed months are
    upserted; the current month is fetched live and not frozen.
 6. The assembled result is written back to the cache with a TTL and returned.
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant H as hooks.server.ts
+    participant C as Report cache
+    participant R as Report builder
+    participant DB as Postgres
+    participant GH as GitHub GraphQL
+
+    B->>H: POST /api/metrics (selection)
+    H->>H: resolve user, audit, reject 401 if anon
+    H->>C: getMetrics(selection)
+    alt cache hit
+        C-->>B: assembled report (JSON)
+    else cache miss (single-flight lock)
+        C->>R: build
+        R->>DB: read persisted rows + fetchedAt
+        R->>GH: fetch stale + current month only
+        GH-->>R: nodes
+        R->>DB: upsert completed months
+        R-->>C: assembled report
+        C-->>B: assembled report (JSON)
+    end
+```
 
 The same pattern (cache wrapper over a builder over Postgres plus GitHub) is used
 for the flow and attention views.
@@ -135,4 +160,5 @@ needed, the resource store on the client is the natural place to add it.
 - [data-and-caching.md](./data-and-caching.md): schema, incremental persistence, Redis.
 - [frontend.md](./frontend.md): pages, runes, resource stores, charts.
 - [guide.md](./guide.md): a practical setup and usage walkthrough.
-- [local-oidc.md](./local-oidc.md): running an OIDC provider locally.
+- [features.md](./features.md): the complete feature catalog.
+- [oidc.md](./oidc.md): authentication setup for any provider.

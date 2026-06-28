@@ -51,13 +51,14 @@ Completed months are computed once and persisted in Postgres; the in-progress mo
 
 ## Documentation
 
+- [Features](docs/features.md): the complete catalog of what the app does.
 - [Architecture](docs/architecture.md): how the pieces fit and the design decisions behind them.
 - [Configuration](docs/configuration.md): every environment variable and admin setting.
 - [GitHub integration](docs/github-integration.md): GraphQL queries, rate limiting, pagination, metrics math.
 - [Data and caching](docs/data-and-caching.md): schema, incremental persistence, Redis single-flight, warming.
 - [Frontend](docs/frontend.md): pages, runes, resource stores, charts.
 - [Guide](docs/guide.md): setup and usage walkthrough.
-- [Local OIDC](docs/local-oidc.md): running an OIDC provider locally.
+- [OIDC](docs/oidc.md): authentication setup for any provider, with a local Keycloak example.
 
 ## Development
 

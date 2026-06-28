@@ -41,8 +41,7 @@ In production you also need the OIDC and `AUTH_SECRET` values below.
 
 If neither `ADMINS` nor `ADMIN_SUBS` is set, nobody is an admin and settings stay
 environment only. The callback URL to register with your provider is
-`{ORIGIN}/auth/callback/oidc`. See [local-oidc.md](./local-oidc.md) for a local
-provider.
+`{ORIGIN}/auth/callback/oidc`. See [oidc.md](./oidc.md) for provider setup.
 
 ## Preset teams and windows
 
