@@ -70,7 +70,7 @@ Set `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `AUTH_SECRET` and
 `ORIGIN`, and leave `AUTH_DISABLED` unset. Register
 `{ORIGIN}/auth/callback/oidc` as the redirect URI with your provider. Grant admin
 rights by listing emails or subjects in `ADMINS`. See
-[local-oidc.md](./local-oidc.md) to test the flow locally.
+[oidc.md](./oidc.md) for provider setup and a local test flow.
 
 ## Keep it warm
 
