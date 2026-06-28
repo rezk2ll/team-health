@@ -2,10 +2,6 @@
 
 Engineering-delivery metrics for any GitHub team: PR throughput, review depth, code volume, and release cadence, pulled from GitHub and rendered as charts.
 
-## Why
-
-Engineering managers need an honest, current read on how a team is shipping without spreadsheets or one-off scripts. Twake Team Health turns a selection of repositories and members into charts (merged PRs, review load, lines changed per person, time to merge, bugs, releases), plus an organization-wide trend view and a before/after period comparison. Completed months are stored so GitHub is queried only for what changed.
-
 ## Stack
 
 SvelteKit 2 and Svelte 5 (runes), deployed as a Node server via `adapter-node`. Tailwind 4 and layerchart for the UI, Postgres via Drizzle ORM for persisted history, Redis (ioredis) for the report cache and cross-replica coordination, Auth.js for OIDC, and a custom GitHub GraphQL client. Tested with Vitest, built with pnpm.
