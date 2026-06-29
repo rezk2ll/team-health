@@ -1,6 +1,7 @@
 import { env } from '$env/dynamic/private';
 import type { Selection, Member, Repo } from './github/types';
 import { DEFAULT_TEAM_ID, type Team } from '$lib/client/selection';
+import { isValidTimeZone, withTeamTz } from '$lib/tz';
 
 // The default team is CONFIGURATION, not source: set DEFAULT_TEAM to a JSON blob
 // ({ name, members:[{login,name,email?}], repos:[{owner,repo}] }) so the team can
@@ -10,7 +11,7 @@ const FALLBACK_MEMBERS: Member[] = [{ login: 'octocat', name: 'The Octocat' }];
 
 const FALLBACK_REPOS: Repo[] = [{ owner: 'octocat', repo: 'Hello-World' }];
 
-type RawTeam = { name?: string; members?: Member[]; repos?: Repo[] };
+type RawTeam = { name?: string; members?: Member[]; repos?: Repo[]; tz?: string };
 
 function parseEnvTeams(): RawTeam[] | null {
 	if (!env.DEFAULT_TEAMS) return null;
@@ -22,7 +23,8 @@ function parseEnvTeams(): RawTeam[] | null {
 			.map((t) => ({
 				name: typeof t.name === 'string' ? t.name : undefined,
 				members: Array.isArray(t.members) ? t.members : [],
-				repos: (t.repos as unknown[]).map(parseRepoRef).filter((r): r is Repo => !!r)
+				repos: (t.repos as unknown[]).map(parseRepoRef).filter((r): r is Repo => !!r),
+				tz: isValidTimeZone(t.tz) ? t.tz : undefined
 			}))
 			// Drop teams left with no parseable repos (the guard is on real repos, not
 			// the raw count, so a team of all-malformed entries doesn't become repos:[]).
@@ -46,6 +48,7 @@ export function defaultTeams(): Team[] {
 		name: t.name ?? `Default team ${i + 1}`,
 		members: t.members ?? [],
 		repos: t.repos ?? [],
+		...(t.tz ? { tz: t.tz } : {}),
 		builtin: true
 	}));
 }
@@ -96,5 +99,7 @@ function dedupeRepos(repos: Repo[]): Repo[] {
 
 export function defaultSelection(): Selection {
 	const t = defaultTeams()[0];
-	return { repos: t.repos, members: t.members, months: DEFAULT_MONTHS, memberMonths: DEFAULT_MEMBER_MONTHS };
+	// Resolve member timezones (own override, else the team default) so the default
+	// selection classifies burnout in local time, matching the per-team page.
+	return { repos: t.repos, members: withTeamTz(t.members, t.tz), months: DEFAULT_MONTHS, memberMonths: DEFAULT_MEMBER_MONTHS };
 }

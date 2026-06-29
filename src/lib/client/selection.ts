@@ -7,6 +7,8 @@ export type Team = {
 	name: string;
 	members: Member[];
 	repos: Repo[];
+	/** Default IANA timezone for the team; members inherit it unless they set their own. */
+	tz?: string;
 	builtin?: boolean;
 };
 

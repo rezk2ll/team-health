@@ -104,6 +104,9 @@ export const team = pgTable(
 		name: text('name').notNull(),
 		members: jsonb('members').$type<Member[]>().notNull(),
 		repos: jsonb('repos').$type<Repo[]>().notNull(),
+		// Default IANA timezone for the team; members without their own inherit it for
+		// burnout/recovery local-time classification. Null = use each commit's offset.
+		tz: text('tz'),
 		createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 		updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
 	},

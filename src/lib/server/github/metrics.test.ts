@@ -199,6 +199,26 @@ describe('commitLocalTime / classifyCommitTime', () => {
 		expect(classifyCommitTime('2026-06-10T09:00:00+01:00')).toEqual({ weekend: false, lateNight: false });
 	});
 
+	it('classifies in the member timezone when given, not UTC (the Hanoi case)', () => {
+		// 02:45 UTC is 09:45 in Hanoi (a normal Friday morning), NOT late night.
+		expect(classifyCommitTime('2026-06-19T02:45:58Z', 'Asia/Ho_Chi_Minh')).toEqual({ weekend: false, lateNight: false });
+		// ...but read as UTC (no tz) the same instant is < 06:00 -> wrongly "late night".
+		expect(classifyCommitTime('2026-06-19T02:45:58Z').lateNight).toBe(true);
+		// 15:30 UTC is 22:30 in Hanoi -> genuinely late night there; UTC misses it.
+		expect(classifyCommitTime('2026-06-16T15:30:00Z', 'Asia/Ho_Chi_Minh')).toEqual({ weekend: false, lateNight: true });
+		expect(classifyCommitTime('2026-06-16T15:30:00Z').lateNight).toBe(false);
+	});
+
+	it('commitLocalTime reports the member-local hour for a tz', () => {
+		// 18:00 UTC Sunday = 01:00 Monday in Hanoi (+07): hour 1, weekday Mon (1).
+		expect(commitLocalTime('2026-06-21T18:00:00Z', 'Asia/Ho_Chi_Minh')).toEqual({ dow: 1, hour: 1 });
+	});
+
+	it('falls back to the embedded offset for an invalid tz', () => {
+		// Bogus zone -> offset path: +02:00 keeps 22:45 local.
+		expect(commitLocalTime('2026-06-12T22:45:00+02:00', 'Bogus/Zone')).toEqual({ dow: 5, hour: 22 });
+	});
+
 	it('weekIdOf gives Monday-aligned buckets: a week off is a real gap', () => {
 		// 2026-06-01 is a Monday, 2026-06-07 the Sunday that ends the same week.
 		const mon = weekIdOf('2026-06-01T09:00:00Z')!;

@@ -123,50 +123,73 @@ type ReviewPrNode = {
 
 type CommitNode = { oid: string; committedDate: string; author: { email: string | null; user: { login: string } | null } };
 
-// --- Burnout detection: when (in the author's own local time) was a commit made ---
-// GitHub's `committedDate` is a GitTimestamp: an ISO-8601 string that KEEPS the
-// committer's machine offset (e.g. ...T22:45:01+02:00), unlike DateTime which is
-// normalized to UTC. That offset is the closest per-commit proxy we have for the
-// person's timezone, so we read local wall-clock straight off it.
+// --- Burnout / recovery: when (in the committer's LOCAL time) was a commit made ---
+// We need the committer's local wall clock. Sources, in priority order:
+//   1. An explicit IANA timezone configured for the member (DST-correct via Intl).
+//      This is necessary because many commits are stamped in UTC (CI, squash-merges,
+//      UTC-configured machines), so the embedded offset alone misreads, e.g., a Hanoi
+//      team's mornings as "late night".
+//   2. The UTC offset embedded in `committedDate` (a correctly-configured machine).
+//   3. Plain UTC when neither is available.
 
-/** Local weekday (0=Sun..6=Sat) and hour (0-23) as they read on the committer's
- * own clock. `new Date(...)` would re-zone to the SERVER's locale, so instead we
- * shift the UTC instant by the embedded offset and read the UTC fields back. */
-export function commitLocalTime(iso: string): { dow: number; hour: number } | null {
-	// Trailing "+HH:MM" / "-HH:MM"; "Z" (or a missing zone) means a zero offset.
+const WEEKDAY_NUM: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+/** Local weekday (0=Sun..6=Sat), hour (0-23), and integer local-day number for a
+ * commit instant — in `tz` (IANA) when given, else from the timestamp's own offset
+ * (a zone-less timestamp is pinned to UTC so the result is never server-dependent). */
+function localParts(iso: string, tz?: string): { dow: number; hour: number; dayNum: number } | null {
 	const m = /([+-])(\d{2}):?(\d{2})$/.exec(iso);
-	// Force a zone-less timestamp to UTC: GitHub's committedDate always carries an
-	// offset, but a bare datetime would otherwise be parsed in the SERVER's locale,
-	// making the result machine-dependent. Pinning to UTC keeps it deterministic.
 	const hasZone = !!m || /[zZ]$/.test(iso);
 	const ms = Date.parse(hasZone ? iso : `${iso}Z`);
 	if (Number.isNaN(ms)) return null;
+	if (tz) {
+		try {
+			const parts = new Intl.DateTimeFormat('en-US', {
+				timeZone: tz,
+				weekday: 'short',
+				hour12: false,
+				hour: '2-digit',
+				year: 'numeric',
+				month: '2-digit',
+				day: '2-digit'
+			}).formatToParts(new Date(ms));
+			const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+			const dow = WEEKDAY_NUM[get('weekday')];
+			const hour = Number(get('hour')) % 24; // some engines render midnight as "24"
+			if (dow === undefined || Number.isNaN(hour)) return null;
+			const dayNum = Math.floor(Date.UTC(Number(get('year')), Number(get('month')) - 1, Number(get('day'))) / DAY_MS);
+			return { dow, hour, dayNum };
+		} catch {
+			// Invalid/unknown tz: fall through to the embedded-offset path.
+		}
+	}
 	const offsetMin = m ? (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3])) : 0;
-	const local = new Date(ms + offsetMin * 60_000);
-	return { dow: local.getUTCDay(), hour: local.getUTCHours() };
+	const localMs = ms + offsetMin * 60_000;
+	const d = new Date(localMs);
+	return { dow: d.getUTCDay(), hour: d.getUTCHours(), dayNum: Math.floor(localMs / DAY_MS) };
 }
 
-/** A monotonic, Monday-aligned 7-day bucket id for a commit instant, for recovery
- * (time-off) detection. Buckets MUST align to the work week: epoch 1970-01-01 is a
- * Thursday, so without the shift a normal Mon-Fri week would straddle two buckets
- * and a full week off would leave no gap (the streak would never reset). Shifting
- * to the prior Monday makes one Mon-Sun calendar week map to exactly one bucket, so
- * a quiet week is a missing id that breaks the consecutive run. Returns null for an
- * unparseable timestamp so it is simply not counted as an active week. */
-export function weekIdOf(iso: string): number | null {
-	const ms = Date.parse(iso);
-	if (Number.isNaN(ms)) return null;
-	const WEEK_MS = 7 * 86_400_000;
-	const MONDAY_OFFSET_MS = 4 * 86_400_000; // 1970-01-05 (a Monday) becomes bucket 0
-	return Math.floor((ms - MONDAY_OFFSET_MS) / WEEK_MS);
+/** Local weekday + hour for a commit, in the member's timezone when known. */
+export function commitLocalTime(iso: string, tz?: string): { dow: number; hour: number } | null {
+	const p = localParts(iso, tz);
+	return p ? { dow: p.dow, hour: p.hour } : null;
 }
 
-/** Classify a commit's local timestamp into the two burnout buckets: committed on
- * a weekend (Sat/Sun), and/or in the late-night window (22:00-05:59). */
-export function classifyCommitTime(iso: string): { weekend: boolean; lateNight: boolean } {
-	const t = commitLocalTime(iso);
-	if (!t) return { weekend: false, lateNight: false };
-	return { weekend: t.dow === 0 || t.dow === 6, lateNight: t.hour >= 22 || t.hour < 6 };
+/** Monday-aligned 7-day bucket id for recovery (time-off) detection. Buckets MUST
+ * align to the work week (epoch 1970-01-01 is a Thursday; 1970-01-05 (Mon) is day 4),
+ * so one Mon-Sun calendar week maps to exactly one bucket and a full week off leaves
+ * a gap that resets the streak. Computed in the member's local time when `tz` is set. */
+export function weekIdOf(iso: string, tz?: string): number | null {
+	const p = localParts(iso, tz);
+	return p ? Math.floor((p.dayNum - 4) / 7) : null;
+}
+
+/** Classify a commit's local timestamp into the two burnout buckets: committed on a
+ * weekend (Sat/Sun), and/or in the late-night window (22:00-05:59), in `tz` if known. */
+export function classifyCommitTime(iso: string, tz?: string): { weekend: boolean; lateNight: boolean } {
+	const p = localParts(iso, tz);
+	if (!p) return { weekend: false, lateNight: false };
+	return { weekend: p.dow === 0 || p.dow === 6, lateNight: p.hour >= 22 || p.hour < 6 };
 }
 
 /** Attribute a commit to exactly one member: a linked GitHub login wins, then a
@@ -515,6 +538,9 @@ export async function fetchMemberRepoMonthRows(
 	// Member lookup maps (built once) so commit attribution is a single O(commits)
 	// pass per repo/month instead of O(members x commits) re-scans.
 	const byLogin = new Map(members.map((mm) => [mm.login.toLowerCase(), mm.login]));
+	// Effective IANA timezone per member (already resolved member-override-or-team-
+	// default upstream), keyed by canonical login, for local-time burnout classification.
+	const tzByLogin = new Map(members.map((mm) => [mm.login, mm.tz]));
 	// Email is the fallback when a commit has no linked GitHub user. Drop any email
 	// claimed by more than one member (shared/misconfigured address), otherwise it
 	// would mis-attribute every commit authored under it to one arbitrary member.
@@ -558,7 +584,10 @@ export async function fetchMemberRepoMonthRows(
 					const add = (login: string, c: CommitNode) => {
 						let s = shas.get(login);
 						if (!s) shas.set(login, (s = new Map()));
-						if (!s.has(c.oid)) s.set(c.oid, { ...classifyCommitTime(c.committedDate), week: weekIdOf(c.committedDate) });
+						if (!s.has(c.oid)) {
+							const tz = tzByLogin.get(login);
+							s.set(c.oid, { ...classifyCommitTime(c.committedDate, tz), week: weekIdOf(c.committedDate, tz) });
+						}
 					};
 					for (const c of prCommits) {
 						const t = Date.parse(c.committedDate);

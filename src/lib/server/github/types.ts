@@ -5,7 +5,7 @@ export type Repo = {
 	 * that publish a release per package). Omitted = releases counted normally. */
 	noReleases?: boolean;
 };
-export type Member = { login: string; name: string; email?: string };
+export type Member = { login: string; name: string; email?: string; tz?: string };
 
 /** One repository's metrics for one month. Mirrors the old RepoMonth shape so the
  * existing chart transforms keep working, plus the derived stock/release/resolution. */
