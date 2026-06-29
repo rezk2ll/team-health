@@ -6,7 +6,7 @@
 	import { attention } from '$lib/client/attention.svelte';
 	import { scope } from '$lib/client/scope.svelte';
 	import { computeSignals, DEFAULT_TARGETS, type SignalLevel } from '$lib/signals';
-	import { AlertCircle, AlertTriangle, CheckCircle2, Loader2 } from '@lucide/svelte';
+	import { AlertCircle, AlertTriangle, ArrowRight, CheckCircle2, Loader2 } from '@lucide/svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import { page } from '$app/state';
 
@@ -105,6 +105,15 @@
 											</a>
 										{/each}
 									</div>
+								{/if}
+								{#if s.link}
+									<a
+										href={s.link.href}
+										class="mt-3 inline-flex items-center gap-1 text-sm font-medium text-[var(--color-brand)] hover:underline"
+									>
+										{s.link.label}
+										<ArrowRight class="h-3.5 w-3.5" />
+									</a>
 								{/if}
 							</div>
 							<div class="shrink-0 text-right">
