@@ -95,7 +95,8 @@ export function issueStatsForMonth(
 	let bugs = 0;
 	const resolutionDaysList: number[] = [];
 	for (const issue of opened.nodes) {
-		const labels = issue.labels.nodes.map((l) => l.name);
+		if (!issue) continue; // partial 200s can null individual search nodes
+		const labels = issue.labels?.nodes?.map((l) => l.name) ?? [];
 		if (isBug(labels)) {
 			bugs += 1;
 			if (issue.closedAt) {

@@ -110,6 +110,22 @@ describe('issueStatsForMonth', () => {
 		expect(s.resolutionDays).toBe(10); // only the closed bug
 		expect(s.resolutionRate).toBe(50); // 1 of 2 bugs resolved
 	});
+
+	it('skips null nodes and missing labels from partial 200s', () => {
+		// GitHub returns null nodes (and can null `labels`) for issues a token
+		// cannot resolve, e.g. a repo it lacks access to. Must not throw.
+		const opened = {
+			issueCount: 2,
+			nodes: [
+				null,
+				{ createdAt: '2026-05-01T00:00:00Z', closedAt: null, labels: null },
+				{ createdAt: '2026-05-01T00:00:00Z', closedAt: '2026-05-03T00:00:00Z', labels: { nodes: [{ name: 'bug' }] } }
+			]
+		} as unknown as Parameters<typeof issueStatsForMonth>[0];
+		const s = issueStatsForMonth(opened, 0);
+		expect(s.opened).toBe(2);
+		expect(s.bugs).toBe(1);
+	});
 });
 
 describe('reviewCountsFromNodes', () => {
