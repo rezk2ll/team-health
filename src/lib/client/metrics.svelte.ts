@@ -2,6 +2,7 @@
 // Global report. Both are Resource loaders posting a Selection to /api/metrics.
 import type { MetricsResult, Selection } from '$lib/server/github/types';
 import type { Team } from './selection';
+import { withTeamTz } from '$lib/tz';
 import { Resource, postJson, redirectToSignIn } from './resource.svelte';
 
 // Re-exported so existing importers (scope store, etc.) keep their import path.
@@ -13,7 +14,9 @@ export function selectionFor(
 	memberMonths: number,
 	to?: string
 ): Selection {
-	return { repos: team.repos, members: team.members, months, memberMonths, ...(to ? { to } : {}) };
+	// Resolve each member's effective timezone (own override, else the team default)
+	// so burnout/recovery classify commits in the right local time.
+	return { repos: team.repos, members: withTeamTz(team.members, team.tz), months, memberMonths, ...(to ? { to } : {}) };
 }
 
 class MetricsStore extends Resource<MetricsResult> {

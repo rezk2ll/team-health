@@ -5,7 +5,11 @@
 	import { scope } from '$lib/client/scope.svelte';
 	import { discovery } from '$lib/client/discovery.svelte';
 	import { repoKey, parseRepoKey, type Team } from '$lib/client/selection';
+	import { commonTimeZones } from '$lib/tz';
 	import type { Member, Repo } from '$lib/server/github/types';
+
+	// IANA zones for the timezone pickers (burnout/recovery classify commits in local time).
+	const timeZones = commonTimeZones();
 	import { Plus, Pencil, Trash2, Check, Users, GitBranch, Loader2, Search, Copy } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
@@ -41,6 +45,9 @@
 		repos: Set<string>;
 		// Subset of `repos` whose GitHub releases are excluded from the stats.
 		noReleases: Set<string>;
+		// Team default timezone ('' = none) and per-member overrides (login -> IANA zone).
+		tz: string;
+		memberTz: Map<string, string>;
 	};
 	let draft = $state<Draft | null>(null);
 	// A preconfigured team shown read-only in the detail panel.
@@ -49,11 +56,13 @@
 	let repoQuery = $state('');
 
 	function startNew() {
-		draft = { id: null, name: '', members: new Set(), repos: new Set(), noReleases: new Set() };
+		draft = { id: null, name: '', members: new Set(), repos: new Set(), noReleases: new Set(), tz: '', memberTz: new Map() };
 		viewing = null;
 		memberQuery = '';
 		repoQuery = '';
 	}
+	const memberTzOf = (t: Team) =>
+		new Map(t.members.filter((m) => m.tz).map((m) => [m.login, m.tz as string]));
 	/** Open a team's members and repositories read-only (used for default teams). */
 	function view(t: Team) {
 		viewing = t;
@@ -66,7 +75,9 @@
 			name: `${t.name} copy`,
 			members: new Set(t.members.map((m) => m.login)),
 			repos: new Set(t.repos.map(repoKey)),
-			noReleases: new Set(t.repos.filter((r) => r.noReleases).map(repoKey))
+			noReleases: new Set(t.repos.filter((r) => r.noReleases).map(repoKey)),
+			tz: t.tz ?? '',
+			memberTz: memberTzOf(t)
 		};
 		viewing = null;
 		memberQuery = '';
@@ -80,7 +91,9 @@
 			name: t.name,
 			members: new Set(t.members.map((m) => m.login)),
 			repos: new Set(t.repos.map(repoKey)),
-			noReleases: new Set(t.repos.filter((r) => r.noReleases).map(repoKey))
+			noReleases: new Set(t.repos.filter((r) => r.noReleases).map(repoKey)),
+			tz: t.tz ?? '',
+			memberTz: memberTzOf(t)
 		};
 		viewing = null;
 		memberQuery = '';
@@ -88,6 +101,12 @@
 	}
 	function cancel() {
 		draft = null;
+	}
+	function setMemberTz(login: string, value: string) {
+		if (!draft) return;
+		if (value) draft.memberTz.set(login, value);
+		else draft.memberTz.delete(login);
+		draft = { ...draft }; // reassign to trigger reactivity (matches the toggle pattern)
 	}
 
 	const memberByLogin = $derived(new Map(discovery.members.map((m) => [m.login, m])));
@@ -98,9 +117,11 @@
 
 	async function save() {
 		if (!draft) return;
-		const members: Member[] = [...draft.members].map(
-			(login) => memberByLogin.get(login) ?? { login, name: login }
-		);
+		const members: Member[] = [...draft.members].map((login) => {
+			const base = memberByLogin.get(login) ?? { login, name: login };
+			const tz = draft!.memberTz.get(login);
+			return tz ? { ...base, tz } : base;
+		});
 		const repos: Repo[] = [...draft.repos].map((k) => {
 			const { owner, repo } = repoByKey.get(k) ?? parseRepoKey(k);
 			return draft!.noReleases.has(k) ? { owner, repo, noReleases: true } : { owner, repo };
@@ -109,7 +130,7 @@
 		saving = true;
 		saveError = null;
 		try {
-			const input = { name: draft.name.trim(), members, repos };
+			const input = { name: draft.name.trim(), members, repos, ...(draft.tz ? { tz: draft.tz } : {}) };
 			if (draft.id) await scope.updateTeam(draft.id, input);
 			else await scope.addTeam(input);
 			draft = null;
@@ -290,14 +311,30 @@
 				</Card.Root>
 			{:else if draft}
 				<Card.Root class="gap-0 p-7 shadow-sm">
-					<div class="mb-6">
-						<label for="team-name" class="eyebrow mb-2 block">Team name</label>
-						<input
-							id="team-name"
-							bind:value={draft.name}
-							placeholder="e.g. Backend squad"
-							class="w-full max-w-md rounded-lg border border-[var(--color-ink-300)] bg-[var(--color-card)] px-3 py-2 text-sm focus:border-[var(--color-brand)] focus:outline-none"
-						/>
+					<div class="mb-6 flex flex-wrap items-start gap-5">
+						<div class="min-w-0 flex-1">
+							<label for="team-name" class="eyebrow mb-2 block">Team name</label>
+							<input
+								id="team-name"
+								bind:value={draft.name}
+								placeholder="e.g. Backend squad"
+								class="w-full max-w-md rounded-lg border border-[var(--color-ink-300)] bg-[var(--color-card)] px-3 py-2 text-sm focus:border-[var(--color-brand)] focus:outline-none"
+							/>
+						</div>
+						<div>
+							<label for="team-tz" class="eyebrow mb-2 block">Default timezone</label>
+							<select
+								id="team-tz"
+								bind:value={draft.tz}
+								class="w-64 rounded-lg border border-[var(--color-ink-300)] bg-[var(--color-card)] px-3 py-2 text-sm focus:border-[var(--color-brand)] focus:outline-none"
+							>
+								<option value="">Use each commit's own offset</option>
+								{#each timeZones as z (z)}<option value={z}>{z}</option>{/each}
+							</select>
+							<p class="mt-1 max-w-64 text-[11px] text-[var(--color-ink-500)]">
+								Used to read burnout timing in local time. Members can override below.
+							</p>
+						</div>
 					</div>
 
 					{#if discovery.loading}
@@ -318,12 +355,25 @@
 								</div>
 								<div class="h-64 overflow-y-auto rounded-lg border border-[var(--color-ink-200)]">
 									{#each filteredMembers as m (m.login)}
-										<label class="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 text-sm hover:bg-[var(--color-ink-50)]">
-											<input type="checkbox" checked={draft.members.has(m.login)} onchange={() => toggle('members', m.login)} class="accent-[var(--color-brand)]" />
-											<Avatar login={m.login} name={m.name} size={18} />
-											<span class="text-[var(--color-ink-900)]">{m.name}</span>
-											<span class="font-mono text-[11px] text-[var(--color-ink-500)]">{m.login}</span>
-										</label>
+										<div class="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--color-ink-50)]">
+											<label class="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5">
+												<input type="checkbox" checked={draft.members.has(m.login)} onchange={() => toggle('members', m.login)} class="accent-[var(--color-brand)]" />
+												<Avatar login={m.login} name={m.name} size={18} />
+												<span class="truncate text-[var(--color-ink-900)]">{m.name}</span>
+												<span class="font-mono text-[11px] text-[var(--color-ink-500)]">{m.login}</span>
+											</label>
+											{#if draft.members.has(m.login)}
+												<select
+													class="max-w-32 shrink-0 rounded border border-[var(--color-ink-200)] bg-[var(--color-card)] px-1 py-0.5 text-[11px] text-[var(--color-ink-600)] focus:border-[var(--color-brand)] focus:outline-none"
+													title="Timezone override for {m.login}"
+													value={draft.memberTz.get(m.login) ?? ''}
+													onchange={(e) => setMemberTz(m.login, e.currentTarget.value)}
+												>
+													<option value="">team default</option>
+													{#each timeZones as z (z)}<option value={z}>{z}</option>{/each}
+												</select>
+											{/if}
+										</div>
 									{/each}
 								</div>
 							</div>
