@@ -48,6 +48,31 @@
 		warn: '#b45309',
 		ok: 'var(--color-positive)'
 	};
+
+	// Daily level history for the metrics-derived signals (burnout, workload, ...),
+	// keyed by signal id. Best-effort enhancement: a fetch failure just hides strips.
+	type HistoryPoint = { day: string; level: SignalLevel; value: string };
+	let history = $state<Record<string, HistoryPoint[]>>({});
+	let historyReq = 0; // ignore out-of-order responses when the team switches mid-flight
+	$effect(() => {
+		const t = scope.activeTeam;
+		const req = ++historyReq;
+		history = {};
+		if (!t?.repos.length) return;
+		const repos = t.repos;
+		fetch('/api/signals/history', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ repos })
+		})
+			.then((r) => (r.ok ? r.json() : {}))
+			.then((h) => {
+				if (req === historyReq) history = h ?? {};
+			})
+			.catch(() => {
+				if (req === historyReq) history = {};
+			});
+	});
 </script>
 
 <Topbar
@@ -122,6 +147,22 @@
 										{s.link.label}
 										<ArrowRight class="h-3.5 w-3.5" />
 									</a>
+								{/if}
+								{#if history[s.id]?.length > 1}
+									<div class="mt-3">
+										<div class="mb-1 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-ink-500)]">
+											Recent days
+										</div>
+										<div class="flex gap-0.5" title="daily level over recent snapshots">
+											{#each history[s.id] as p (p.day)}
+												<span
+													class="h-3 w-2 rounded-[2px]"
+													style="background: {accent[p.level]}"
+													title="{p.day}: {p.value} ({p.level})"
+												></span>
+											{/each}
+										</div>
+									</div>
 								{/if}
 							</div>
 							<div class="shrink-0 text-right">

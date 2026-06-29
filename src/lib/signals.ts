@@ -108,6 +108,23 @@ export const DEFAULT_TARGETS: Targets = {
 	recoveryStreakBadWeeks: 12
 };
 
+/** Stable, order-independent key for a repo SET (FNV-1a, 32-bit hex). Lets a
+ * scope's signal history be matched between the snapshot job and the page without
+ * depending on team identity: same repos -> same key -> same history. De-duplicates
+ * and lowercases so the raw preset list and the request-parsed list (which dedups
+ * case-insensitively) hash to the same key. */
+export function scopeKey(repos: { owner: string; repo: string }[]): string {
+	const norm = [...new Set(repos.map((r) => `${r.owner}/${r.repo}`.toLowerCase()))]
+		.sort()
+		.join(',');
+	let h = 0x811c9dc5;
+	for (let i = 0; i < norm.length; i++) {
+		h ^= norm.charCodeAt(i);
+		h = Math.imul(h, 0x01000193);
+	}
+	return (h >>> 0).toString(16).padStart(8, '0');
+}
+
 const SEVERITY: Record<SignalLevel, number> = { bad: 0, warn: 1, ok: 2 };
 
 /** Worse as the value climbs (e.g. review latency). */
