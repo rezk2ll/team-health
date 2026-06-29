@@ -42,6 +42,8 @@ export function adminList(): string[] {
 export const { handle: authHandle, signOut } = SvelteKitAuth({
 	trustHost: true,
 	secret: env.AUTH_SECRET,
+	// Use our own themed sign-in route instead of Auth.js's generic built-in page.
+	pages: { signIn: '/login' },
 	providers: [
 		{
 			id: 'oidc',
