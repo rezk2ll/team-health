@@ -31,12 +31,16 @@ async function acquire(): Promise<void> {
 		active++;
 		return;
 	}
+	// Wait for a slot. release() hands it over directly (the count stays at the cap
+	// across the handoff), so we must NOT increment again here — doing so left a
+	// window where a racing acquire() saw the transient free slot and exceeded the cap.
 	await new Promise<void>((resolve) => waiters.push(resolve));
-	active++;
 }
 function release(): void {
-	active--;
-	waiters.shift()?.();
+	const next = waiters.shift();
+	if (next)
+		next(); // transfer this slot to the next waiter; `active` is unchanged
+	else active--; // no one waiting: free the slot
 }
 
 export class GitHubError extends Error {}

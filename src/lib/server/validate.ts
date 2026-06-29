@@ -1,4 +1,5 @@
 import type { Member, Repo } from './github/types';
+import { isValidTimeZone } from '$lib/tz';
 
 // GitHub identifiers, used to reject anything that could break out of a GraphQL
 // string literal (injection) before interpolation, and to bound list sizes.
@@ -17,10 +18,12 @@ export function parseMembers(value: unknown, cap: number): Member[] {
 		const m = raw as Record<string, unknown>;
 		if (!m || !isLogin(m.login)) continue;
 		const email = typeof m.email === 'string' && EMAIL_RE.test(m.email) ? m.email : undefined;
+		const tz = isValidTimeZone(m.tz) ? m.tz : undefined;
 		out.push({
 			login: m.login,
 			name: typeof m.name === 'string' && m.name ? m.name : m.login,
-			email
+			email,
+			...(tz ? { tz } : {})
 		});
 		if (out.length >= cap) break;
 	}

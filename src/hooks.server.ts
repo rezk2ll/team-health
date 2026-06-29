@@ -10,10 +10,18 @@ const DEV_USER = { sub: 'dev', name: 'Dev User', email: 'dev@local' };
 const RATE_WINDOW_MS = 60_000;
 const RATE_LIMIT = 300; // requests/min/IP before an event is flagged suspicious
 const ipHits = new Map<string, number[]>();
+// Bound the per-IP map so a long-lived process seeing many distinct IPs doesn't
+// grow it without limit; sweep entries with no hit inside the window.
+const IP_MAP_CAP = 5000;
 function abusiveRate(ip: string, now: number): number {
 	const arr = (ipHits.get(ip) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
 	arr.push(now);
 	ipHits.set(ip, arr);
+	if (ipHits.size > IP_MAP_CAP) {
+		for (const [k, v] of ipHits) {
+			if (k !== ip && (v.length === 0 || now - v[v.length - 1] >= RATE_WINDOW_MS)) ipHits.delete(k);
+		}
+	}
 	return arr.length;
 }
 
@@ -72,6 +80,8 @@ const guard: Handle = async ({ event, resolve }) => {
 
 	const path = event.url.pathname;
 	if (path === '/auth' || path.startsWith('/auth/')) return resolve(event);
+	// The sign-in page itself must be reachable without a session.
+	if (path === '/login') return resolve(event);
 	// Cron endpoints carry no session; they authorize themselves with CRON_SECRET.
 	if (path.startsWith('/api/cron/')) return resolve(event);
 
@@ -85,7 +95,7 @@ const guard: Handle = async ({ event, resolve }) => {
 				headers: { 'content-type': 'application/json' }
 			});
 		}
-		throw redirect(303, `/auth/signin?callbackUrl=${encodeURIComponent(path)}`);
+		throw redirect(303, `/login?callbackUrl=${encodeURIComponent(path)}`);
 	}
 	const u = session.user as { id?: string; name?: string | null; email?: string | null };
 	const sub = u.id ?? u.email;

@@ -21,7 +21,7 @@ import type { Member, Repo } from '$lib/server/github/types';
 // keeping the displayed range length in sync with the data the server returns.
 const RANGE_MAX = 24;
 
-type TeamInput = { name: string; members: Member[]; repos: Repo[] };
+type TeamInput = { name: string; members: Member[]; repos: Repo[]; tz?: string };
 
 class ScopeStore {
 	teams = $state<Team[]>([]);

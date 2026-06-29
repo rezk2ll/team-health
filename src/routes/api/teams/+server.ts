@@ -18,7 +18,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 	} catch (e) {
 		throw error(400, (e as Error).message);
 	}
-	const team = await createUserTeam(locals.user.sub, input.name, input.members, input.repos);
+	const team = await createUserTeam(locals.user.sub, input.name, input.members, input.repos, input.tz);
 	await audit(locals.user.sub, 'team.create', { id: team.id, name: team.name });
 	return json({ team }, { status: 201 });
 };

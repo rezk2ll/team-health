@@ -23,6 +23,13 @@
 	// Explicit URL wins (e.g. a GitHub App's avatar, which has no login `.png`);
 	// otherwise derive it from the login.
 	const src = $derived(srcUrl || `https://github.com/${encodeURIComponent(login)}.png?size=${size * 2}`);
+	// Reset the error state when the source changes, so a reused instance (e.g. the
+	// profile page across param changes) retries the new avatar instead of staying
+	// stuck on the initials fallback from a previous login.
+	$effect(() => {
+		void src;
+		failed = false;
+	});
 </script>
 
 {#if failed}

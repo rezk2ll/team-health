@@ -1,6 +1,6 @@
 {
-  "id": "e16ecb87-862c-4c1f-94a4-4b2d4101e2cc",
-  "prevId": "084c9608-21c0-41ef-bb56-3b0cb55bcfd2",
+  "id": "32ad6a50-007f-4bd1-a085-fc2ca70b4b28",
+  "prevId": "e16ecb87-862c-4c1f-94a4-4b2d4101e2cc",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -542,6 +542,87 @@
             "owner",
             "repo",
             "month"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.signal_snapshot": {
+      "name": "signal_snapshot",
+      "schema": "",
+      "columns": {
+        "scope": {
+          "name": "scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "signal_id": {
+          "name": "signal_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "day": {
+          "name": "day",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "level": {
+          "name": "level",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ts": {
+          "name": "ts",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "signal_snapshot_lookup_idx": {
+          "name": "signal_snapshot_lookup_idx",
+          "columns": [
+            {
+              "expression": "scope",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "day",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "signal_snapshot_scope_signal_id_day_pk": {
+          "name": "signal_snapshot_scope_signal_id_day_pk",
+          "columns": [
+            "scope",
+            "signal_id",
+            "day"
           ]
         }
       },

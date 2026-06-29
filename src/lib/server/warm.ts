@@ -11,6 +11,7 @@ import {
 import { getAppSettings } from './app-config';
 import { computeSignals, scopeKey } from '$lib/signals';
 import { upsertSignalSnapshots } from './signal-history';
+import { withTeamTz } from '$lib/tz';
 import type { Member, Repo, Selection } from './github/types';
 
 const repoKey = (r: Repo) => `${r.owner}/${r.repo}`;
@@ -28,7 +29,9 @@ export type WarmResult = { warmed: string[]; failed: { label: string; error: str
 export async function warmAll(): Promise<WarmResult> {
 	const teams = defaultTeams();
 	const globalRepos = defaultGlobalRepos();
-	const allMembers = dedupeMembers(teams.flatMap((t) => t.members));
+	// Resolve each member's effective timezone (own override, else team default)
+	// before deduping, so global burnout is also classified in local time.
+	const allMembers = dedupeMembers(teams.flatMap((t) => withTeamTz(t.members, t.tz)));
 	const allRepos = dedupeRepos([...globalRepos, ...teams.flatMap((t) => t.repos)]);
 	const targets = (await getAppSettings()).signals;
 
@@ -50,7 +53,7 @@ export async function warmAll(): Promise<WarmResult> {
 			run: () =>
 				warmScope({
 					repos: t.repos,
-					members: t.members,
+					members: withTeamTz(t.members, t.tz),
 					months: DEFAULT_MONTHS,
 					memberMonths: DEFAULT_MEMBER_MONTHS
 				} satisfies Selection)

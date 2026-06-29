@@ -8,14 +8,15 @@ const TTL_MS = Number(env.METRICS_CACHE_TTL_MS ?? 20 * 60 * 1000);
 
 function selectionKey(s: Selection): string {
 	return JSON.stringify({
-		v: 5, // bump when MetricsResult's shape changes
+		v: 6, // bump when MetricsResult's shape or its derivation changes
 		// The `!nr` suffix and the global ignore-list both change which releases are
 		// counted, so two otherwise-identical selections must not share a cache entry.
 		repos: s.repos.map((r) => `${r.owner}/${r.repo}${r.noReleases ? '!nr' : ''}`).sort(),
 		noReleaseRepos: [...globalNoReleaseRepos()].sort(),
-		// Include email: commit attribution matches on it, so two selections with
-		// the same logins but different emails are not the same report.
-		members: s.members.map((m) => `${m.login}:${m.email ?? ''}`).sort(),
+		// Include email (commit attribution matches on it) and tz (it changes the
+		// burnout/recovery local-time classification), so a member's email or timezone
+		// change isn't masked by a stale entry.
+		members: s.members.map((m) => `${m.login}:${m.email ?? ''}:${m.tz ?? ''}`).sort(),
 		months: s.months,
 		memberMonths: s.memberMonths,
 		to: s.to ?? null
