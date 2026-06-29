@@ -71,6 +71,13 @@
       "when": 1782754053883,
       "tag": "0009_polite_rattler",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1782755392684,
+      "tag": "0010_lazy_vivisector",
+      "breakpoints": true
     }
   ]
 }

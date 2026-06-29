@@ -8,6 +8,9 @@ import {
 	DEFAULT_MONTHS,
 	DEFAULT_MEMBER_MONTHS
 } from './preset';
+import { getAppSettings } from './app-config';
+import { computeSignals, scopeKey } from '$lib/signals';
+import { upsertSignalSnapshots } from './signal-history';
 import type { Member, Repo, Selection } from './github/types';
 
 const repoKey = (r: Repo) => `${r.owner}/${r.repo}`;
@@ -27,12 +30,25 @@ export async function warmAll(): Promise<WarmResult> {
 	const globalRepos = defaultGlobalRepos();
 	const allMembers = dedupeMembers(teams.flatMap((t) => t.members));
 	const allRepos = dedupeRepos([...globalRepos, ...teams.flatMap((t) => t.repos)]);
+	const targets = (await getAppSettings()).signals;
+
+	// Warm a scope's metrics, then snapshot today's metrics-derived signals (bus
+	// factor, burnout, workload, recovery) for its history timeline. The snapshot is
+	// best-effort and reuses the just-computed metrics, so it adds no GitHub calls.
+	const warmScope = async (selection: Selection) => {
+		const metrics = await getMetrics(selection);
+		try {
+			await upsertSignalSnapshots(scopeKey(selection.repos), computeSignals(metrics, null, null, targets));
+		} catch (e) {
+			console.warn(`[warm] signal snapshot failed: ${(e as Error).message}`);
+		}
+	};
 
 	const jobs: { label: string; run: () => Promise<unknown> }[] = [
 		...teams.map((t) => ({
 			label: `team:${t.name}`,
 			run: () =>
-				getMetrics({
+				warmScope({
 					repos: t.repos,
 					members: t.members,
 					months: DEFAULT_MONTHS,
@@ -42,14 +58,14 @@ export async function warmAll(): Promise<WarmResult> {
 		{
 			label: 'global',
 			run: () =>
-				getMetrics({
+				warmScope({
 					repos: globalRepos,
 					members: allMembers,
 					months: GLOBAL_MONTHS,
 					memberMonths: DEFAULT_MEMBER_MONTHS
 				} satisfies Selection)
 		},
-		{ label: 'default', run: () => getMetrics(defaultSelection()) },
+		{ label: 'default', run: () => warmScope(defaultSelection()) },
 		{ label: 'attention', run: () => getAttention(allRepos) }
 	];
 

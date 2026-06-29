@@ -92,6 +92,27 @@ export const reviewRepoMonth = pgTable(
 	]
 );
 
+// Daily history of computed signal levels, so a point-in-time check (burnout,
+// workload, ...) gains a timeline. Keyed by a stable repo-set hash (scopeKey) so
+// the snapshot job and the page agree regardless of team identity. One row per
+// (scope, signal, day): the warm job upserts today's row, last write wins.
+export const signalSnapshot = pgTable(
+	'signal_snapshot',
+	{
+		scope: text('scope').notNull(), // scopeKey(repos)
+		signalId: text('signal_id').notNull(), // e.g. 'burnout'
+		day: text('day').notNull(), // YYYY-MM-DD (UTC)
+		level: text('level').notNull(), // 'ok' | 'warn' | 'bad'
+		value: text('value').notNull(), // display value, e.g. '88%'
+		ts: timestamp('ts', { withTimezone: true }).defaultNow().notNull()
+	},
+	(t) => [
+		primaryKey({ columns: [t.scope, t.signalId, t.day] }),
+		// The page reads a scope's whole recent history; index that lookup.
+		index('signal_snapshot_lookup_idx').on(t.scope, t.day)
+	]
+);
+
 // ---------------------------------------------------------------------------
 // Per-user teams (private to the OIDC subject) + audit trail.
 // ---------------------------------------------------------------------------

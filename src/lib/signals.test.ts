@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeSignals, DEFAULT_TARGETS } from './signals';
+import { computeSignals, DEFAULT_TARGETS, scopeKey } from './signals';
 import type {
 	FlowResult,
 	AttentionResult,
@@ -306,5 +306,27 @@ describe('computeSignals', () => {
 		);
 		expect(sig[0].level).toBe('bad');
 		expect(sig[sig.length - 1].level).toBe('ok');
+	});
+});
+
+describe('scopeKey', () => {
+	it('is order- and case-independent for the same repo set', () => {
+		const a = scopeKey([
+			{ owner: 'linagora', repo: 'b' },
+			{ owner: 'linagora', repo: 'a' }
+		]);
+		const b = scopeKey([
+			{ owner: 'Linagora', repo: 'A' },
+			{ owner: 'linagora', repo: 'b' }
+		]);
+		expect(a).toBe(b);
+	});
+
+	it('differs for different repo sets', () => {
+		expect(scopeKey([{ owner: 'o', repo: 'a' }])).not.toBe(scopeKey([{ owner: 'o', repo: 'b' }]));
+	});
+
+	it('is an 8-char hex string', () => {
+		expect(scopeKey([{ owner: 'o', repo: 'a' }])).toMatch(/^[0-9a-f]{8}$/);
 	});
 });
