@@ -17,7 +17,7 @@
 	const statusClass = (s: number | null) => {
 		if (s == null) return 'text-[var(--color-ink-500)]';
 		if (s >= 500) return 'text-[var(--color-negative)]';
-		if (s >= 400) return 'text-[var(--color-warn)]';
+		if (s >= 400) return 'text-[var(--color-warning)]';
 		return 'text-[var(--color-positive)]';
 	};
 </script>

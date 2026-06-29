@@ -42,8 +42,8 @@ function envSettings(): AppSettings {
 		defaultMonths: DEFAULT_MONTHS,
 		defaultMemberMonths: DEFAULT_MEMBER_MONTHS,
 		signals: DEFAULT_TARGETS,
-		attentionStaleDays: Number(env.ATTENTION_STALE_DAYS ?? 7),
-		attentionAgingDays: Number(env.ATTENTION_AGING_DAYS ?? 14),
+		attentionStaleDays: days(env.ATTENTION_STALE_DAYS) ?? 7,
+		attentionAgingDays: days(env.ATTENTION_AGING_DAYS) ?? 14,
 		fetchConcurrency: Number(env.GITHUB_MAX_CONCURRENCY) || 8,
 		orgName: env.ORG_NAME ?? '',
 		bugLabels: []
@@ -52,7 +52,9 @@ function envSettings(): AppSettings {
 
 const months = (n: unknown): number | undefined => {
 	const v = Number(n);
-	return Number.isInteger(v) && v >= 1 && v <= 36 ? v : undefined;
+	// Cap at 24 to match parseSelection's clamp; a larger configured value would be
+	// silently truncated when a report is generated.
+	return Number.isInteger(v) && v >= 1 && v <= 24 ? v : undefined;
 };
 
 const days = (n: unknown): number | undefined => {

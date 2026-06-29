@@ -78,8 +78,11 @@ export async function getReport(
 			'[report] DATABASE_URL is not set: fetching everything live with no persistence. ' +
 				'Set DATABASE_URL so completed months are cached and the GitHub token is not rate limited.'
 		);
+		// Use the configured bug labels here too; without this the no-DB path classifies
+		// zero bugs while the DB path (which passes bugLabels) classifies correctly.
+		const { bugLabels } = await getAppSettings();
 		const [repoRows, memberRows, reviewRows] = await Promise.all([
-			fetchRepoMonthRows(gql, selection.repos, months),
+			fetchRepoMonthRows(gql, selection.repos, months, bugLabels),
 			fetchMemberRepoMonthRows(gql, selection.repos, selection.members, memberMonths),
 			fetchReviewRepoMonthRows(gql, selection.repos, memberMonths)
 		]);

@@ -6,7 +6,7 @@ import { allowedOrgs } from './discovery';
  * restricted to allowed orgs (shared with selection validation). Throws on invalid input. */
 export function parseTeamInput(body: unknown): { name: string; members: Member[]; repos: Repo[] } {
 	const b = (body ?? {}) as Record<string, unknown>;
-	const name = typeof b.name === 'string' ? b.name.trim() : '';
+	const name = typeof b.name === 'string' ? b.name.trim().slice(0, 100) : '';
 	const members = parseMembers(b.members, 200);
 	const repos = parseRepos(b.repos, 100, allowedOrgs());
 	if (!name) throw new Error('team name is required');

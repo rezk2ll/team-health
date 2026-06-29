@@ -605,6 +605,7 @@ export async function fetchMemberRepoMonthRows(
 						? await drainSearchNodes(gql, mergedQuery(m), MERGED_PR_NODE_FIELDS, raw)
 						: (raw?.nodes ?? []);
 					for (const pr of nodes) {
+						if (!pr) continue; // partial 200s can null individual search nodes
 						const canon = pr.author?.login && byLogin.get(pr.author.login.toLowerCase());
 						if (canon) {
 							const r = row(canon, owner, repo, monthKey(m));
