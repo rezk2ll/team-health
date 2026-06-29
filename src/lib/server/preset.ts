@@ -1,7 +1,7 @@
 import { env } from '$env/dynamic/private';
 import type { Selection, Member, Repo } from './github/types';
 import { DEFAULT_TEAM_ID, type Team } from '$lib/client/selection';
-import { isValidTimeZone } from '$lib/tz';
+import { isValidTimeZone, withTeamTz } from '$lib/tz';
 
 // The default team is CONFIGURATION, not source: set DEFAULT_TEAM to a JSON blob
 // ({ name, members:[{login,name,email?}], repos:[{owner,repo}] }) so the team can
@@ -99,5 +99,7 @@ function dedupeRepos(repos: Repo[]): Repo[] {
 
 export function defaultSelection(): Selection {
 	const t = defaultTeams()[0];
-	return { repos: t.repos, members: t.members, months: DEFAULT_MONTHS, memberMonths: DEFAULT_MEMBER_MONTHS };
+	// Resolve member timezones (own override, else the team default) so the default
+	// selection classifies burnout in local time, matching the per-team page.
+	return { repos: t.repos, members: withTeamTz(t.members, t.tz), months: DEFAULT_MONTHS, memberMonths: DEFAULT_MEMBER_MONTHS };
 }

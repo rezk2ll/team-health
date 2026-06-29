@@ -130,7 +130,9 @@
 		saving = true;
 		saveError = null;
 		try {
-			const input = { name: draft.name.trim(), members, repos, ...(draft.tz ? { tz: draft.tz } : {}) };
+			// Always send tz (even '') so clearing the team default propagates to the
+			// optimistic in-memory team, not just the server (which nulls an empty tz).
+			const input = { name: draft.name.trim(), members, repos, tz: draft.tz };
 			if (draft.id) await scope.updateTeam(draft.id, input);
 			else await scope.addTeam(input);
 			draft = null;
