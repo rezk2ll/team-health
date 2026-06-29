@@ -53,10 +53,16 @@ export class Resource<T> {
 			if (seq !== this.#seq) return; // a newer request superseded this one
 			if (res.status === 401) return redirectToSignIn();
 			if (!res.ok) {
-				this.error = `${res.status}: ${(await res.text()).slice(0, 200)}`;
+				const text = (await res.text()).slice(0, 200);
+				if (seq !== this.#seq) return; // re-check: reading the body is async
+				this.error = `${res.status}: ${text}`;
 				return;
 			}
-			this.data = (await res.json()) as T;
+			// Re-check after the body await too, so a superseded response can't
+			// overwrite newer data when its json() resolves last.
+			const json = (await res.json()) as T;
+			if (seq !== this.#seq) return;
+			this.data = json;
 		} catch (e) {
 			if (seq === this.#seq) this.error = (e as Error).message;
 		} finally {
