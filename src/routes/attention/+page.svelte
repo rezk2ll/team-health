@@ -7,6 +7,7 @@
 	import { AlertCircle, Loader2, ExternalLink, CheckCircle2 } from '@lucide/svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import type { AttentionReason } from '$lib/server/github/types';
+	import { page } from '$app/state';
 
 	const team = $derived(scope.activeTeam);
 
@@ -27,7 +28,13 @@
 	};
 	const ORDER: AttentionReason[] = ['changes_requested', 'unreviewed', 'stale', 'aging', 'draft_stale'];
 
-	let filter = $state<AttentionReason | null>(null);
+	// Honor a ?reason= deep link (e.g. from the signals page) as the initial filter.
+	const reasonParam = page.url.searchParams.get('reason');
+	const initialFilter = (ORDER as string[]).includes(reasonParam ?? '')
+		? (reasonParam as AttentionReason)
+		: null;
+
+	let filter = $state<AttentionReason | null>(initialFilter);
 	const items = $derived((data?.items ?? []).filter((it) => !filter || it.reasons.includes(filter)));
 
 	const primaryColor = (reasons: AttentionReason[]) => {

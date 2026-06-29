@@ -15,6 +15,8 @@ export type Signal = {
 	detail: string;
 	/** Members this signal points at, each rendered as an avatar + link to their profile. */
 	people?: { login: string; note: string }[];
+	/** Where to dig in: an in-app route this signal drills into (e.g. the attention worklist). */
+	link?: { href: string; label: string };
 };
 
 export type Targets = {
@@ -193,7 +195,8 @@ export function computeSignals(
 			title: 'Aging open PRs',
 			value: `${s.aging}`,
 			target: `under ${t.agingWarn}`,
-			detail: 'Open PRs that have been around too long.'
+			detail: 'Open PRs that have been around too long.',
+			link: { href: '/attention?reason=aging', label: 'View open PRs' }
 		});
 		out.push({
 			id: 'stale-prs',
@@ -201,7 +204,8 @@ export function computeSignals(
 			title: 'Stalled open PRs',
 			value: `${s.stale}`,
 			target: `under ${t.staleWarn}`,
-			detail: 'Open PRs with no recent activity.'
+			detail: 'Open PRs with no recent activity.',
+			link: { href: '/attention?reason=stale', label: 'View open PRs' }
 		});
 		out.push({
 			id: 'unreviewed-prs',
@@ -209,7 +213,8 @@ export function computeSignals(
 			title: 'Unreviewed open PRs',
 			value: `${s.unreviewed}`,
 			target: `under ${t.unreviewedWarn}`,
-			detail: 'Open PRs still waiting for a first review.'
+			detail: 'Open PRs still waiting for a first review.',
+			link: { href: '/attention?reason=unreviewed', label: 'View open PRs' }
 		});
 	}
 
